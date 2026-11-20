@@ -31,6 +31,35 @@ const MAX_TRANSACTION_PAGES = 100;
 
 export type EnableBankingHost = Pick<HostAPI, 'network' | 'secrets'>;
 
+/**
+ * Wealthfolio refused to send a request (as opposed to Enable Banking answering
+ * with an error). It reports every refusal with the same generic message, so it
+ * cannot be told apart from a connection failure. The usual cause is that the
+ * add-on was installed or updated without approving api.enablebanking.com under
+ * "Hosts de red", which leaves it without internet access.
+ */
+export class NetworkBlockedError extends Error {
+  readonly hostCode?: string;
+
+  constructor(cause: unknown) {
+    const detail = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
+    const code =
+      cause && typeof cause === 'object' && typeof (cause as { code?: unknown }).code === 'string'
+        ? (cause as { code: string }).code
+        : undefined;
+    super(
+      'Wealthfolio no ha dejado salir la petición a api.enablebanking.com. Suele pasar al ' +
+        'instalar o actualizar el add-on sin marcar el acceso a internet: ve a Ajustes → ' +
+        'Complementos, pasa el ratón por Enable Banking Sync, pulsa el icono del ojo («Ver ' +
+        'permisos»), marca api.enablebanking.com en «Hosts de red» y pulsa Guardar. Si ya está ' +
+        'marcado, comprueba tu conexión a internet.' +
+        (detail || code ? ` (Detalle: ${[detail, code && `[${code}]`].filter(Boolean).join(' ')})` : ''),
+    );
+    this.name = 'NetworkBlockedError';
+    this.hostCode = code;
+  }
+}
+
 export class EnableBankingError extends Error {
   constructor(
     message: string,
@@ -139,14 +168,20 @@ export class EnableBankingClient {
     const send = async (): Promise<NetworkResponse> => {
       const headers: Record<string, string> = { Accept: 'application/json' };
       if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-      return this.host.network.request({
-        url: this.buildUrl(path, options.query),
-        method,
-        headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
-        auth: { type: 'bearer', secretKey: JWT_SECRET },
-        timeoutSecs: options.timeoutSecs ?? 60,
-      });
+      try {
+        return await this.host.network.request({
+          url: this.buildUrl(path, options.query),
+          method,
+          headers,
+          body: options.body === undefined ? undefined : JSON.stringify(options.body),
+          auth: { type: 'bearer', secretKey: JWT_SECRET },
+          timeoutSecs: options.timeoutSecs ?? 60,
+        });
+      } catch (error) {
+        // Any HTTP answer from Enable Banking, errors included, arrives as a response.
+        // A rejection means Wealthfolio did not let the request out.
+        throw new NetworkBlockedError(error);
+      }
     };
 
     await this.ensureToken();

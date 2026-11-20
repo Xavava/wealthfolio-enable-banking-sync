@@ -1,6 +1,6 @@
 import type { ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
 import { pickBalance } from './balance';
-import { EnableBankingClient, EnableBankingError } from './enable-banking-client';
+import { EnableBankingClient, EnableBankingError, NetworkBlockedError } from './enable-banking-client';
 import { mapTransactions, pendingDate } from './mapping';
 import {
   addDays,
@@ -130,6 +130,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
 
   const results: SyncAccountResult[] = [];
   const work: AccountWork[] = [];
+  let networkBlocked = false;
 
   // 1. Download booked movements (and the balance) of every mapped account.
   for (const connection of connections) {
@@ -182,6 +183,13 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         continue;
       }
 
+      // Once Wealthfolio refuses one request it refuses them all: don't repeat it.
+      if (networkBlocked) {
+        result.status = 'error';
+        result.message = 'No se ha consultado: Wealthfolio no deja salir las peticiones (ver la primera cuenta con error).';
+        continue;
+      }
+
       onProgress?.(`Descargando movimientos de ${bank} · ${account.name} desde ${formatIsoDate(dateFrom)}…`);
       try {
         const transactions = await client.getAllTransactions(account.uid, dateFrom, today);
@@ -198,6 +206,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         const holdDates = pending.map((s) => pendingDate(s.tx) ?? dateFrom);
         work.push({ account, result, rows: mapped.rows, holdDates, freshRows: 0 });
       } catch (error) {
+        if (error instanceof NetworkBlockedError) networkBlocked = true;
         result.status =
           error instanceof EnableBankingError && error.needsReconnect ? 'reconnect' : 'error';
         result.message = errorMessage(error);

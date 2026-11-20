@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.4] - 2026-11-20
+
+### Changed
+
+- Cuando Wealthfolio no deja salir una petición (lo habitual: instalar o actualizar el add-on
+  sin marcar `api.enablebanking.com` en «Hosts de red»), el add-on lo dice y explica cómo
+  aprobarlo, en lugar de mostrar «No se pudo completar la operación». En la sincronización se
+  avisa una vez y no se insiste con el resto de cuentas.
+- README: la casilla de «Hosts de red» hay que marcarla al instalar y al actualizar.
+
 ## [1.2.3] - 2026-11-20
 
 ### Fixed

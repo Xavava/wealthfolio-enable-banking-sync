@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { EnableBankingClient, PRIVATE_KEY_SECRET } from '../src/lib/enable-banking-client';
+import { EnableBankingClient, NetworkBlockedError, PRIVATE_KEY_SECRET } from '../src/lib/enable-banking-client';
 import { runSync } from '../src/lib/sync';
 import {
   APP_ID,
@@ -243,6 +243,37 @@ describe('first sync needs a start date chosen by the user', () => {
     const second = await runSync({ host: h.host, config, connections: mapAll(again), now: new Date('2026-11-21T10:00:00') });
     expect(second.report.imported).toBe(0);
     expect(second.report.duplicates).toBe(5);
+  });
+});
+
+describe('when Wealthfolio does not let requests out', () => {
+  it('explains how to approve the host instead of a generic error', async () => {
+    h.bank.blocked = true;
+    const error = await new EnableBankingClient(h.host, APP_ID).getApplication().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NetworkBlockedError);
+    const message = (error as Error).message;
+    expect(message).toMatch(/Ajustes → Complementos/);
+    expect(message).toMatch(/marca api\.enablebanking\.com en «Hosts de red»/);
+    expect(message).toMatch(/\(Detalle: No se pudo completar la operación\. \[internal\]\)$/);
+  });
+
+  it('reports it once and does not keep asking for the other accounts', async () => {
+    const { connections: connected } = await connect(h.host);
+    h.bank.blocked = true;
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(report.accounts.map((a) => a.status)).toEqual(['error', 'error']);
+    expect(report.accounts[0].message).toMatch(/Hosts de red/);
+    expect(report.accounts[1].message).toMatch(/^No se ha consultado/);
+    expect(h.bank.blockedAttempts).toBe(1);
+    expect(connections[0].accounts.every((a) => !a.lastSyncedDate)).toBe(true);
+  });
+
+  it('does not mistake an error answered by Enable Banking for a blocked request', async () => {
+    h.bank.balances.checking = 'error'; // HTTP 500 from the API
+    const { connections: connected } = await connect(h.host);
+    const { report } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(report.accounts[0].notes?.join(' ')).toMatch(/ASPSP error/);
+    expect(report.accounts[0].notes?.join(' ')).not.toMatch(/Hosts de red/);
   });
 });
 

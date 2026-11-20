@@ -77,7 +77,15 @@ export class FakeEnableBanking {
     );
   }
 
+  /** Wealthfolio refuses to send requests (e.g. host not approved after an update). */
+  blocked = false;
+  blockedAttempts = 0;
+
   handle = async (request: NetworkRequest): Promise<NetworkResponse> => {
+    if (this.blocked) {
+      this.blockedAttempts += 1;
+      throw hostError('Host api.enablebanking.com is not approved');
+    }
     const url = new URL(request.url);
     expect(url.host).toBe('api.enablebanking.com');
     const method = request.method ?? 'GET';
