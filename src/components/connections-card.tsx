@@ -257,16 +257,30 @@ function AccountRow({
             )}
             {account.wealthfolioAccountId && beyondTypicalHistory && (
               <p className="text-muted-foreground text-xs">
-                Muchos bancos solo dan {TYPICAL_HISTORY_DAYS} días de historial: comprueba después que
-                el saldo cuadra.
+                Muchos bancos solo dan {TYPICAL_HISTORY_DAYS} días de historial, salvo en la hora
+                siguiente a autorizar: sincroniza nada más conectar o renovar el banco.
               </p>
             )}
           </>
         )}
       </div>
     </div>
+    <HistoryLine account={account} />
     <BalanceLine account={account} valuation={valuation} />
     </div>
+  );
+}
+
+/** What the bank gave the last time the add-on asked for the longest history. */
+function HistoryLine({ account }: { account: LinkedAccount }) {
+  const history = account.history;
+  if (!history || !account.wealthfolioAccountId) return null;
+  return (
+    <p className="text-muted-foreground mt-2 text-xs">
+      {history.earliest
+        ? `Historial que dio el banco: desde el ${formatDate(history.earliest)} (pedido desde el ${formatDate(history.requestedFrom)}; ${formatDateTime(history.checkedAt)}).`
+        : `El banco no devolvió ningún movimiento desde el ${formatDate(history.requestedFrom)} (${formatDateTime(history.checkedAt)}).`}
+    </p>
   );
 }
 

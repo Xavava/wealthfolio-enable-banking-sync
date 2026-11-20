@@ -57,6 +57,12 @@ export interface LinkedAccount {
   syncFromConfirmed?: boolean;
   /** Last balance reported by the bank (fetched at most once a day). */
   bankBalance?: BankBalance;
+  /**
+   * What the bank gave the last time the add-on asked for the longest history it
+   * keeps: the date asked for and the earliest movement returned (absent when it
+   * returned none).
+   */
+  history?: { requestedFrom: string; earliest?: string; checkedAt: string };
 }
 
 export interface BankConnection {

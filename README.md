@@ -40,7 +40,7 @@ Enable Banking es gratuito para uso personal con tus propias cuentas (modo «res
 ## 2. Instala el add-on
 
 En Wealthfolio, ve a **Ajustes → Complementos**, elige instalar desde archivo y selecciona
-`wealthfolio-enable-banking-sync-addon-1.2.4.zip`.
+`wealthfolio-enable-banking-sync-addon-1.3.0.zip`.
 
 > **Importante:** en la ventana de permisos, en **Hosts de red**, marca
 > `api.enablebanking.com` antes de pulsar **Aprobar e instalar**. La casilla viene
@@ -152,12 +152,32 @@ anterior a la fecha de inicio que falta, movimientos pendientes o rechazados, o 
 aún no ha terminado de recalcular. En tarjetas de crédito el banco puede dar la deuda en
 positivo; se indica como «cuadra con el signo contrario».
 
+## Cuánto historial da el banco
+
+Enable Banking no publica cuánto historial da cada banco (se puede consultar en su panel, en
+*Data Insights*). Lo habitual es que el banco dé historial largo solo durante **más o menos la
+hora siguiente a autorizar** y, después, solo los **últimos 90 días**.
+
+Si se le pide un rango que no guarda, BBVA no da error: devuelve una lista **vacía**. Por eso:
+
+- La primera sincronización de cada cuenta, y cualquiera que empiece hace más de 90 días, pide a
+  Enable Banking el historial **más largo** que conserve el banco a partir de tu fecha de inicio
+  (`strategy=longest`). Así entra lo que haya en lugar de nada.
+- El informe y *Bancos conectados* dicen desde qué fecha dio movimientos el banco y desde cuándo
+  los pediste.
+- Si el banco no devuelve ningún movimiento, la cuenta **no** se da por sincronizada (estado
+  *Revisar fecha*): la siguiente sincronización vuelve a intentarlo desde la misma fecha.
+- Para traer más de 90 días: conecta o renueva el banco y sincroniza **enseguida**.
+
+Las sincronizaciones siguientes piden el rango exacto (los últimos días), que no gasta llamadas
+de más al banco.
+
 ## Limitaciones
 
 - **Consultas al día**: por PSD2, algunos bancos limitan las consultas sin el usuario delante a
   unas 4 al día por cuenta. Si ves un error de límite, espera unas horas.
-- **Histórico**: muchos bancos solo dan 90 días de movimientos (algo más justo después de
-  autorizar).
+- **Histórico**: muchos bancos solo dan 90 días de movimientos, salvo justo después de
+  autorizar (ver *Cuánto historial da el banco*).
 - No importa categorías: usa las reglas de categorización de gastos de Wealthfolio.
 - El saldo solo se compara, no se importa ni se corrige.
 - No todos los bancos dan acceso a las tarjetas (de crédito o prepago) por PSD2; lo sabrás al

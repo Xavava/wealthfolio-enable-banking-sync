@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0] - 2026-11-20
+
+### Changed
+
+- La primera sincronización de cada cuenta, y cualquiera que empiece hace más de 90 días, pide a
+  Enable Banking el historial más largo que conserve el banco desde la fecha de inicio
+  (`strategy=longest`). El informe y «Bancos conectados» dicen desde qué fecha dio movimientos.
+
+### Fixed
+
+- Si se pedía más historial del que guarda el banco, BBVA devolvía una lista vacía y la cuenta
+  se daba por sincronizada: las siguientes sincronizaciones empezaban una semana atrás y el
+  historial intermedio se perdía sin aviso. Ahora entra lo que el banco tenga y, si no devuelve
+  nada, la cuenta no se da por sincronizada.
+
 ## [1.2.4] - 2026-11-20
 
 ### Changed

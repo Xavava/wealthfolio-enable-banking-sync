@@ -77,6 +77,31 @@ export class FakeEnableBanking {
     );
   }
 
+  /**
+   * Earliest date the bank still gives, per account kind. Unset = everything, with
+   * no date filtering (the default for tests that don't care about history).
+   */
+  historyFrom: Partial<Record<'checking' | 'savings', string>> = {};
+
+  /**
+   * What the bank returns for a query, like BBVA through Enable Banking: with the
+   * default strategy, a date_from older than the history it keeps gets an empty
+   * list; with strategy=longest, everything from max(date_from, its earliest).
+   */
+  private availableTransactions(kind: string, query: URLSearchParams): EbTransaction[] {
+    const all = this.transactions[kind] ?? [];
+    const limit = this.historyFrom[kind as 'checking' | 'savings'];
+    if (!limit) return all;
+    const dateFrom = query.get('date_from') ?? '0000-01-01';
+    const dateOf = (tx: EbTransaction) => tx.booking_date ?? tx.transaction_date ?? tx.value_date ?? '';
+    if (query.get('strategy') === 'longest') {
+      const from = dateFrom > limit ? dateFrom : limit;
+      return all.filter((tx) => dateOf(tx) >= from);
+    }
+    if (dateFrom < limit) return [];
+    return all.filter((tx) => dateOf(tx) >= dateFrom);
+  }
+
   /** Wealthfolio refuses to send requests (e.g. host not approved after an update). */
   blocked = false;
   blockedAttempts = 0;
@@ -121,7 +146,7 @@ export class FakeEnableBanking {
     }
     const match = url.pathname.match(/^\/accounts\/(checking|savings)-\d+\/(transactions|balances)$/);
     if (method === 'GET' && match && match[2] === 'transactions') {
-      const all = this.transactions[match[1]];
+      const all = this.availableTransactions(match[1], url.searchParams);
       // Two pages to exercise continuation keys.
       if (url.searchParams.get('continuation_key') === 'page-2') {
         return json(200, { transactions: all.slice(2), continuation_key: null });

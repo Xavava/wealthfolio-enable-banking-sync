@@ -1,7 +1,13 @@
 import type { ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
 import { pickBalance } from './balance';
-import { EnableBankingClient, EnableBankingError, NetworkBlockedError } from './enable-banking-client';
-import { mapTransactions, pendingDate } from './mapping';
+import type { EbTransaction } from './eb-types';
+import {
+  EnableBankingClient,
+  EnableBankingError,
+  NetworkBlockedError,
+  type TransactionsStrategy,
+} from './enable-banking-client';
+import { mapTransactions, pendingDate, transactionDate } from './mapping';
 import {
   addDays,
   formatIsoDate,
@@ -44,6 +50,25 @@ export interface SyncOptions {
 export interface SyncOutcome {
   report: SyncReport;
   connections: BankConnection[];
+}
+
+/** Days of history most banks still give once the hour after authorising is over. */
+export const USUAL_HISTORY_DAYS = 90;
+
+/**
+ * Ask Enable Banking for the longest history the bank keeps on an account's first
+ * sync, or when the start is older than the usual 90 days (e.g. after months
+ * without syncing). Otherwise ask for the exact range: "longest" may cost extra
+ * calls to the bank, which caps unattended reads at about 4 a day.
+ */
+export function fetchStrategy(account: LinkedAccount, dateFrom: string, today: string): TransactionsStrategy {
+  if (!account.lastSyncedDate) return 'longest';
+  return dateFrom < addDays(today, -(USUAL_HISTORY_DAYS - 1)) ? 'longest' : 'default';
+}
+
+/** Date of a movement for history purposes: its booking date, else the earliest it carries. */
+function movementDate(tx: EbTransaction): string | null {
+  return transactionDate(tx) ?? pendingDate(tx);
 }
 
 /**
@@ -98,6 +123,8 @@ interface AccountWork {
   holdDates: string[];
   /** Rows that were new after validation and were sent to import. */
   freshRows: number;
+  /** Do not mark the account as synced (first sync where the bank returned nothing). */
+  keepWindow: boolean;
 }
 
 interface FreshRow {
@@ -190,10 +217,40 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         continue;
       }
 
+      const strategy = fetchStrategy(account, dateFrom, today);
       onProgress?.(`Descargando movimientos de ${bank} · ${account.name} desde ${formatIsoDate(dateFrom)}…`);
+      let keepWindow = false;
       try {
-        const transactions = await client.getAllTransactions(account.uid, dateFrom, today);
+        const transactions = await client.getAllTransactions(account.uid, dateFrom, today, { strategy });
         result.fetched = transactions.length;
+
+        if (strategy === 'longest') {
+          const earliest = minDate(transactions.map(movementDate));
+          account.history = { requestedFrom: dateFrom, earliest, checkedAt: now.toISOString() };
+          if (!earliest) {
+            // BBVA answers "nothing" rather than an error when it does not keep the
+            // history asked for. Marking the account as synced would skip that history
+            // for good, so leave it as it was.
+            keepWindow = !account.lastSyncedDate;
+            result.status = keepWindow ? 'blocked' : result.status;
+            result.message =
+              `El banco no ha devuelto ningún movimiento desde el ${formatIsoDate(dateFrom)}.` +
+              (keepWindow
+                ? ' La cuenta no se da por sincronizada. Si esperabas movimientos, el banco no guarda ' +
+                  'tanto historial o ya pasó la hora siguiente a autorizar: renueva el permiso y ' +
+                  'sincroniza enseguida, o elige una fecha más reciente. Si la cuenta no tuvo ' +
+                  'movimientos en ese tiempo, es normal.'
+                : '');
+          } else if (earliest > dateFrom) {
+            result.notes!.push(
+              `El banco ha dado movimientos desde el ${formatIsoDate(earliest)} (pediste desde el ` +
+                `${formatIsoDate(dateFrom)}). Si en ese intervalo hubo movimientos, el banco no guarda ` +
+                'más historial: compruébalo con el saldo.',
+            );
+          } else {
+            result.notes!.push(`El banco ha dado todo el historial pedido, desde el ${formatIsoDate(earliest)}.`);
+          }
+        }
         const mapped = await mapTransactions(transactions, {
           wealthfolioAccountId: account.wealthfolioAccountId,
           accountIban: account.iban,
@@ -204,7 +261,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         const pending = mapped.skipped.filter((s) => s.reason === 'pending');
         result.pending = pending.length;
         const holdDates = pending.map((s) => pendingDate(s.tx) ?? dateFrom);
-        work.push({ account, result, rows: mapped.rows, holdDates, freshRows: 0 });
+        work.push({ account, result, rows: mapped.rows, holdDates, freshRows: 0, keepWindow });
       } catch (error) {
         if (error instanceof NetworkBlockedError) networkBlocked = true;
         result.status =
@@ -348,6 +405,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       result.message = importError;
       continue;
     }
+    if (entry.keepWindow) continue;
     account.lastSyncedDate = today;
     account.lastSyncedAt = new Date().toISOString();
 

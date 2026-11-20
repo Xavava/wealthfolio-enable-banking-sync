@@ -41,9 +41,11 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
       'wf-savings:TRANSFER_IN',
       'wf-savings:INTEREST',
     ]);
+    // First sync: the longest history from the chosen date (date_to is ignored there).
     const firstQuery = h.bank.transactionRequests()[0].query;
     expect(firstQuery.get('date_from')).toBe('2026-08-01');
-    expect(firstQuery.get('date_to')).toBe('2026-11-20');
+    expect(firstQuery.get('strategy')).toBe('longest');
+    expect(firstQuery.get('date_to')).toBeNull();
     expect(first.connections[0].accounts[0].lastSyncedDate).toBe('2026-11-20');
 
     h.bank.requests = [];
@@ -51,8 +53,12 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
     expect(second.report.imported).toBe(0);
     expect(second.report.duplicates).toBe(5);
     expect(h.activities.stored).toHaveLength(5);
-    // The pending movement (booking date 2026-11-10) is read again; otherwise a week back.
-    expect(h.bank.transactionRequests('checking')[0].query.get('date_from')).toBe('2026-11-10');
+    // Later syncs ask for the exact range. The pending movement (booking date
+    // 2026-11-10) is read again; otherwise a week back.
+    const checkingQuery = h.bank.transactionRequests('checking')[0].query;
+    expect(checkingQuery.get('date_from')).toBe('2026-11-10');
+    expect(checkingQuery.get('date_to')).toBe('2026-11-21');
+    expect(checkingQuery.get('strategy')).toBeNull();
     expect(h.bank.transactionRequests('savings')[0].query.get('date_from')).toBe('2026-11-13');
   });
 
@@ -243,6 +249,63 @@ describe('first sync needs a start date chosen by the user', () => {
     const second = await runSync({ host: h.host, config, connections: mapAll(again), now: new Date('2026-11-21T10:00:00') });
     expect(second.report.imported).toBe(0);
     expect(second.report.duplicates).toBe(5);
+  });
+});
+
+describe('how much history the bank gives', () => {
+  beforeEach(() => {
+    h.bank.transactions.checking = [
+      book({ entry_reference: 'TOO-OLD', booking_date: '2026-08-20' }),
+      book({ entry_reference: 'OLDEST', booking_date: '2026-08-26' }),
+      book({ entry_reference: 'RECENT', booking_date: '2026-10-01' }),
+    ];
+    h.bank.transactions.savings = [];
+    h.bank.historyFrom = { checking: '2026-08-25', savings: '2026-08-25' };
+  });
+
+  it('first sync gets what the bank keeps instead of nothing, and says from when', async () => {
+    const { connections: connected } = await connect(h.host); // syncFrom 2026-08-01
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+
+    expect(report.accounts[0]).toMatchObject({ status: 'ok', fetched: 2, imported: 2 });
+    expect(report.accounts[0].notes?.join(' ')).toMatch(/movimientos desde el 26\/08\/2026 \(pediste desde el 01\/08\/2026\)/);
+    expect(connections[0].accounts[0].history).toMatchObject({ requestedFrom: '2026-08-01', earliest: '2026-08-26' });
+    expect(connections[0].accounts[0].lastSyncedDate).toBe('2026-11-20');
+  });
+
+  it('with the exact range the same bank would have answered nothing (why longest is used)', async () => {
+    const client = new EnableBankingClient(h.host, APP_ID);
+    expect(await client.getAllTransactions('checking-1', '2026-08-01', '2026-11-20')).toEqual([]);
+    expect(await client.getAllTransactions('checking-1', '2026-08-01', '2026-11-20', { strategy: 'longest' })).toHaveLength(2);
+  });
+
+  it('does not mark an account as synced when the bank returns nothing at all', async () => {
+    h.bank.transactions.checking = [];
+    const { connections: connected } = await connect(h.host);
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+
+    expect(report.accounts[0].status).toBe('blocked');
+    expect(report.accounts[0].message).toMatch(/no ha devuelto ningún movimiento desde el 01\/08\/2026.*no se da por sincronizada/i);
+    expect(connections[0].accounts[0].lastSyncedDate).toBeUndefined();
+    expect(connections[0].accounts[0].history).toMatchObject({ requestedFrom: '2026-08-01', earliest: undefined });
+    // The next sync tries the same range again.
+    h.bank.requests = [];
+    await runSync({ host: h.host, config, connections, now: new Date('2026-11-21T10:00:00') });
+    expect(h.bank.transactionRequests('checking')[0].query.get('date_from')).toBe('2026-08-01');
+  });
+
+  it('after months without syncing, asks for the longest history again', async () => {
+    const { connections: connected } = await connect(h.host);
+    const stale = mapAll(connected).map((c) => ({
+      ...c,
+      accounts: c.accounts.map((a) => ({ ...a, lastSyncedDate: '2026-07-01' })),
+    }));
+    h.bank.requests = [];
+    const { report } = await runSync({ host: h.host, config, connections: stale, now: new Date('2026-11-20T10:00:00') });
+    const query = h.bank.transactionRequests('checking')[0].query;
+    expect(query.get('strategy')).toBe('longest');
+    expect(query.get('date_from')).toBe('2026-08-01'); // never before the chosen start
+    expect(report.accounts[0].imported).toBe(2);
   });
 });
 

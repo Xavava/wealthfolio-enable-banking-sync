@@ -27,7 +27,10 @@ export const JWT_SECRET = 'api-jwt';
 
 const TOKEN_LIFETIME_SECONDS = 3600;
 const TOKEN_REFRESH_MARGIN_SECONDS = 300;
-const MAX_TRANSACTION_PAGES = 100;
+/** Several years of an active account fit; a full first download can be long. */
+const MAX_TRANSACTION_PAGES = 400;
+
+export type TransactionsStrategy = 'default' | 'longest';
 
 export type EnableBankingHost = Pick<HostAPI, 'network' | 'secrets'>;
 
@@ -258,12 +261,24 @@ export class EnableBankingClient {
     return response?.balances ?? [];
   }
 
-  /** Fetches every page of transactions for the account in the date range. */
+  /**
+   * Fetches every page of transactions for the account.
+   *
+   * - `default`: exactly date_from..date_to. If the bank does not keep that much
+   *   history it answers with an error or, like BBVA, with an empty list.
+   * - `longest`: Enable Banking looks for the earliest transaction the bank still
+   *   gives and fetches from there (never before date_from); date_to is ignored.
+   *   It may cost extra calls to the bank, so use it only when it matters.
+   * Every page repeats the same parameters plus the continuation key, as the API
+   * requires; an empty page with a key is not the end.
+   */
   async getAllTransactions(
     accountUid: string,
     dateFrom: string,
     dateTo?: string,
+    options: { strategy?: TransactionsStrategy } = {},
   ): Promise<EbTransaction[]> {
+    const strategy = options.strategy ?? 'default';
     const all: EbTransaction[] = [];
     let continuationKey: string | undefined;
     for (let page = 0; page < MAX_TRANSACTION_PAGES; page++) {
@@ -271,7 +286,12 @@ export class EnableBankingClient {
         'GET',
         `/accounts/${encodeURIComponent(accountUid)}/transactions`,
         {
-          query: { date_from: dateFrom, date_to: dateTo, continuation_key: continuationKey },
+          query: {
+            date_from: dateFrom,
+            date_to: strategy === 'longest' ? undefined : dateTo,
+            strategy: strategy === 'longest' ? 'longest' : undefined,
+            continuation_key: continuationKey,
+          },
           timeoutSecs: 120,
         },
       );
