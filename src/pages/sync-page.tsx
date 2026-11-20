@@ -15,7 +15,7 @@ export function SyncPage() {
     <Page>
       <PageHeader
         heading="Sincronizar bancos"
-        text="Importa con un botón los movimientos de tus cuentas bancarias mediante Enable Banking (Open Banking PSD2)."
+        text="Importa con un botón los movimientos de tus cuentas bancarias mediante Enable Banking (PSD2)."
       />
       <PageContent>
         <div className="mx-auto max-w-4xl space-y-6 pb-10">

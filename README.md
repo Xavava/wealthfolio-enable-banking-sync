@@ -3,7 +3,7 @@
 Add-on de [Wealthfolio](https://wealthfolio.app) que importa **con un botón** los movimientos de
 tus cuentas bancarias (Santander, BBVA, CaixaBank, ING, Sabadell, Bankinter, Openbank… y más de
 2.000 bancos europeos) a través de [Enable Banking](https://enablebanking.com), un agregador
-Open Banking regulado (PSD2).
+bancario regulado (PSD2).
 
 - Acceso de **solo lectura**: autorizas el acceso en la web de tu banco; el add-on nunca ve tus
   claves del banco.
@@ -40,7 +40,7 @@ Enable Banking es gratuito para uso personal con tus propias cuentas (modo «res
 ## 2. Instala el add-on
 
 En Wealthfolio, ve a **Ajustes → Add-ons**, elige instalar desde archivo y selecciona
-`wealthfolio-enable-banking-sync-addon-1.2.0.zip`. Acepta los permisos:
+`wealthfolio-enable-banking-sync-addon-1.2.1.zip`. Acepta los permisos:
 
 | Permiso | Para qué |
 | --- | --- |
@@ -148,8 +148,8 @@ positivo; se indica como «cuadra con el signo contrario».
   autorizar).
 - No importa categorías: usa las reglas de categorización de gastos de Wealthfolio.
 - El saldo solo se compara, no se importa ni se corrige.
-- No todos los bancos dan acceso a las tarjetas (de crédito o prepago) por Open Banking; lo
-  sabrás al conectar el banco.
+- No todos los bancos dan acceso a las tarjetas (de crédito o prepago) por PSD2; lo sabrás al
+  conectar el banco.
 - Es necesario copiar y pegar la URL de vuelta del banco, porque los add-ons se ejecutan en un
   sandbox sin acceso al navegador.
 

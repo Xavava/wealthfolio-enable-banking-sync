@@ -1,14 +1,13 @@
 {
   "name": "wealthfolio-enable-banking-sync-addon",
-  "version": "1.2.0",
-  "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
+  "version": "1.2.1",
+  "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (PSD2)",
   "type": "module",
   "main": "dist/addon.js",
   "keywords": [
     "wealthfolio",
     "addon",
     "enable-banking",
-    "open-banking",
     "psd2"
   ],
   "license": "MIT",

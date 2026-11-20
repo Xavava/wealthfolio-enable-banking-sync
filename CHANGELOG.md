@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-11-20
+
+### Changed
+
+- Textos: el add-on se describe como sincronización PSD2 mediante Enable Banking.
+
 ## [1.2.0] - 2026-11-20
 
 ### Changed
