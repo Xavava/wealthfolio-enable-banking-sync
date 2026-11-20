@@ -3,7 +3,7 @@
   "name": "Enable Banking Sync",
   "version": "1.1.0",
   "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
-  "author": "Anonymous",
+  "author": "Abel Marin",
   "main": "dist/addon.js",
   "sdkVersion": "3.13.1",
   "minWealthfolioVersion": "3.13.1",
