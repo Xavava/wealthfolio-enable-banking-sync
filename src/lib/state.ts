@@ -51,10 +51,10 @@ export interface LinkedAccount {
    */
   retryFrom?: string;
   /**
-   * Date (YYYY-MM-DD) of the latest movement already in the Wealthfolio account that
-   * this add-on did not import (e.g. a CSV import), found when the account was chosen.
+   * The user chose `syncFrom` for this Wealthfolio account. Required before the first
+   * sync: the add-on cannot see what is already in the account (e.g. from a CSV).
    */
-  existingUntil?: string;
+  syncFromConfirmed?: boolean;
   /** Last balance reported by the bank (fetched at most once a day). */
   bankBalance?: BankBalance;
 }

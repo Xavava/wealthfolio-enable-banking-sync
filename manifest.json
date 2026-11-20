@@ -1,7 +1,7 @@
 {
   "id": "enable-banking-sync",
   "name": "Enable Banking Sync",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
   "author": "Abel Marin",
   "main": "dist/addon.js",
@@ -52,11 +52,10 @@
     {
       "category": "activities",
       "functions": [
-        "search",
         "checkImport",
         "import"
       ],
-      "purpose": "Validar e importar los movimientos descargados del banco sin duplicar los ya importados, y consultar la fecha del último movimiento de cada cuenta para no solapar lo que ya tenías (por ejemplo, de un CSV)"
+      "purpose": "Validar e importar los movimientos descargados del banco, sin duplicar los ya importados"
     },
     {
       "category": "portfolio",

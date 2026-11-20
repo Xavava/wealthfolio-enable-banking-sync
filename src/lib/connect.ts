@@ -117,13 +117,18 @@ export async function completeBankAuthorization(
   const linked = accounts.map((account) => {
     const fresh = toLinkedAccount(account, { syncFrom: defaultSyncFrom });
     const old = previousByKey.get(fresh.key);
+    // Everything about the account's history survives a renewal, including the
+    // movements held back for the next sync and the confirmed start date.
     return old
       ? {
           ...fresh,
           wealthfolioAccountId: old.wealthfolioAccountId,
           syncFrom: old.syncFrom,
+          syncFromConfirmed: old.syncFromConfirmed,
           lastSyncedDate: old.lastSyncedDate,
           lastSyncedAt: old.lastSyncedAt,
+          retryFrom: old.retryFrom,
+          bankBalance: old.bankBalance,
         }
       : fresh;
   });

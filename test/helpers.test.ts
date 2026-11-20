@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { compareBalances, pickBalance } from '../src/lib/balance';
-import { firstSafeDate, isOwnActivity, latestForeignActivityDate } from '../src/lib/guard';
 import { pendingDate } from '../src/lib/mapping';
 import { daysBetween, formatIsoDate, toDateOnly } from '../src/lib/state';
 import { syncStartDate } from '../src/lib/sync';
@@ -102,33 +101,6 @@ describe('balances', () => {
     expect(compareBalances(bank, { cashBalance: 1467.66, accountCurrency: 'EUR' })).toEqual({ state: 'mismatch', difference: -12.34 });
     expect(compareBalances(bank, { cashBalance: 1480, accountCurrency: 'USD' })).toEqual({ state: 'unknown', reason: 'currency' });
     expect(compareBalances(undefined, { cashBalance: 1, accountCurrency: 'EUR' })).toEqual({ state: 'unknown', reason: 'no-bank' });
-  });
-});
-
-describe('overlap guard', () => {
-  it('finds the latest activity not imported by this add-on, across pages', async () => {
-    const own = Array.from({ length: 60 }, (_, i) => ({
-      date: `2026-11-${String((i % 20) + 1).padStart(2, '0')}T10:00:00Z`,
-      sourceRecordId: `addon:enable-banking-sync:ref:${i}`,
-    })).sort((a, b) => b.date.localeCompare(a.date));
-    const rows = [...own, { date: '2026-10-31T23:30:00Z' }, { date: '2026-10-01T10:00:00Z' }];
-    const calls: number[] = [];
-    const search = async (page: number, pageSize: number) => {
-      calls.push(page);
-      return { data: rows.slice(page * pageSize, (page + 1) * pageSize), meta: { totalRowCount: rows.length } };
-    };
-    const latest = await latestForeignActivityDate({ search } as never, 'acc');
-    expect(latest).toBe(toDateOnly('2026-10-31T23:30:00Z'));
-    expect(calls).toEqual([0, 1]);
-  });
-
-  it('returns null for an empty account and recognises own activities', async () => {
-    const search = async () => ({ data: [], meta: { totalRowCount: 0 } });
-    expect(await latestForeignActivityDate({ search } as never, 'acc')).toBeNull();
-    expect(isOwnActivity({ sourceRecordId: 'addon:enable-banking-sync:fp:x:1' })).toBe(true);
-    expect(isOwnActivity({ sourceRecordId: 'addon:other-addon:1' })).toBe(false);
-    expect(isOwnActivity({})).toBe(false);
-    expect(firstSafeDate('2026-12-31')).toBe('2027-01-01');
   });
 });
 

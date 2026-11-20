@@ -15,7 +15,6 @@ import {
 import { RotateCcw, Unplug } from 'lucide-react';
 import { useState } from 'react';
 import { compareBalances, isBookedBalance } from '../lib/balance';
-import { firstSafeDate, latestForeignActivityDate } from '../lib/guard';
 import { maskIban } from '../lib/mapping';
 import {
   addDays,
@@ -73,8 +72,9 @@ function BalanceLine({ account, valuation }: { account: LinkedAccount; valuation
             Descuadre: {formatMoney(check.difference, bank.currency, true)}
           </Badge>
           <span className="text-muted-foreground w-full">
-            Puede faltar historial anterior a la fecha de inicio, haber movimientos pendientes o
-            rechazados, o Wealthfolio no haber terminado de recalcular.
+            Puede haber movimientos duplicados con un CSV (fecha de inicio solapada), faltar
+            historial anterior a la fecha de inicio, haber movimientos pendientes o rechazados, o
+            Wealthfolio no haber terminado de recalcular.
             {!isBookedBalance(bank) && ' El banco solo da saldo disponible, que puede incluir crédito o retenciones.'}
           </span>
         </>
@@ -109,7 +109,6 @@ function AccountRow({
   wfAccounts,
   duplicateTarget,
   valuation,
-  checking,
   onChange,
   onChooseTarget,
 }: {
@@ -117,8 +116,6 @@ function AccountRow({
   wfAccounts: Account[];
   duplicateTarget: boolean;
   valuation?: AccountValuation;
-  /** True while looking up what is already in the chosen Wealthfolio account. */
-  checking: boolean;
   onChange: (patch: Partial<LinkedAccount>) => void;
   onChooseTarget: (wealthfolioAccountId: string | null) => void;
 }) {
@@ -129,8 +126,8 @@ function AccountRow({
     return score(a) - score(b) || a.name.localeCompare(b.name, 'es');
   });
   const today = toIsoDate(new Date());
-  const overlapsExisting = Boolean(account.existingUntil && account.syncFrom <= account.existingUntil);
-  const beyondTypicalHistory = account.syncFrom < addDays(today, -TYPICAL_HISTORY_DAYS);
+  const beyondTypicalHistory =
+    Boolean(account.syncFromConfirmed) && account.syncFrom < addDays(today, -TYPICAL_HISTORY_DAYS);
 
   return (
     <div className="border-t py-3 first:border-t-0">
@@ -145,7 +142,6 @@ function AccountRow({
         <NativeSelect
           aria-label={`Cuenta de Wealthfolio para ${account.name}`}
           value={account.wealthfolioAccountId ?? ''}
-          disabled={checking}
           onChange={(e) => onChooseTarget(e.target.value || null)}
         >
           <option value="">No sincronizar</option>
@@ -184,22 +180,19 @@ function AccountRow({
             <Input
               type="date"
               aria-label="Importar movimientos desde"
-              value={account.syncFrom}
-              max={account.syncFrom > today ? account.syncFrom : today}
-              onChange={(e) => e.target.value && onChange({ syncFrom: e.target.value })}
-              disabled={!account.wealthfolioAccountId || checking}
+              value={account.syncFromConfirmed ? account.syncFrom : ''}
+              max={today}
+              onChange={(e) =>
+                e.target.value && onChange({ syncFrom: e.target.value, syncFromConfirmed: true })
+              }
+              disabled={!account.wealthfolioAccountId}
             />
-            <p className="text-muted-foreground text-xs">
-              {checking ? 'Comprobando movimientos existentes…' : 'Importar desde'}
-            </p>
-            {account.wealthfolioAccountId && account.existingUntil && (
-              <p
-                className={`text-xs ${overlapsExisting ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
-              >
-                La cuenta ya tiene movimientos hasta el {formatDate(account.existingUntil)} (CSV u
-                otros). {overlapsExisting
-                  ? `Empieza el ${formatDate(firstSafeDate(account.existingUntil))} o después para no duplicarlos.`
-                  : 'Se importará a partir de ahí.'}
+            <p className="text-muted-foreground text-xs">Importar desde</p>
+            {account.wealthfolioAccountId && !account.syncFromConfirmed && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Elige el día siguiente al último movimiento que ya tengas en esta cuenta de
+                Wealthfolio (por ejemplo, de un CSV) para no duplicarlo. Si está vacía, la fecha
+                desde la que quieras historial.
               </p>
             )}
             {account.wealthfolioAccountId && beyondTypicalHistory && (
@@ -232,7 +225,6 @@ export function ConnectionsCard({
   const [error, setError] = useState<string | null>(null);
   // window.confirm() is blocked inside the add-on sandbox, so confirm inline.
   const [confirming, setConfirming] = useState<string | null>(null);
-  const [checking, setChecking] = useState<string | null>(null);
 
   const usable = (wfAccounts.data ?? []).filter(
     (a) => a.isActive && !a.isArchived && a.trackingMode !== 'HOLDINGS',
@@ -259,35 +251,18 @@ export function ConnectionsCard({
   };
 
   /**
-   * A new destination starts its own history. If the Wealthfolio account already
-   * has movements from elsewhere (a CSV, manual entries), start the day after the
-   * latest one: Wealthfolio would not recognise them as the same movements.
+   * A new destination starts its own history, and its start date has to be chosen
+   * again: only the user knows what that Wealthfolio account already holds.
    */
   const chooseTarget = async (sessionId: string, account: LinkedAccount, wealthfolioAccountId: string | null) => {
     setError(null);
-    const patch: Partial<LinkedAccount> = {
+    await updateAccount(sessionId, account.key, {
       wealthfolioAccountId,
+      syncFromConfirmed: false,
       lastSyncedDate: undefined,
       lastSyncedAt: undefined,
       retryFrom: undefined,
-      existingUntil: undefined,
-    };
-    if (wealthfolioAccountId) {
-      setChecking(account.key);
-      try {
-        const existing = await latestForeignActivityDate(ctx.api.activities, wealthfolioAccountId);
-        if (existing) {
-          patch.existingUntil = existing;
-          const safe = firstSafeDate(existing);
-          if (account.syncFrom < safe) patch.syncFrom = safe;
-        }
-      } catch (e) {
-        setError(`No se pudo comprobar qué movimientos hay ya en esa cuenta: ${errorText(e)}`);
-      } finally {
-        setChecking(null);
-      }
-    }
-    await updateAccount(sessionId, account.key, patch);
+    });
   };
 
   const disconnect = async (connection: BankConnection) => {
@@ -367,7 +342,6 @@ export function ConnectionsCard({
                     ? valuations.data?.get(account.wealthfolioAccountId)
                     : undefined
                 }
-                checking={checking === account.key}
                 onChange={(patch) => updateAccount(connection.sessionId, account.key, patch)}
                 onChooseTarget={(id) => chooseTarget(connection.sessionId, account, id)}
               />

@@ -169,42 +169,70 @@ describe('movements are never lost', () => {
   });
 });
 
-describe('first sync never overlaps movements imported from elsewhere', () => {
-  it('blocks an account whose Wealthfolio history reaches the start date, without calling the bank', async () => {
-    h.activities.existing = [
-      { accountId: 'wf-checking', date: '2026-09-15' }, // e.g. from a CSV
-      { accountId: 'wf-checking', date: '2026-09-01' },
-    ];
-    const { connections: connected } = await connect(h.host); // syncFrom 2026-08-01
+describe('first sync needs a start date chosen by the user', () => {
+  it('does not sync an account until its start date is chosen, without calling the bank', async () => {
+    const { connections: connected } = await connect(h.host);
+    const mapped = mapAll(connected);
+    mapped[0].accounts[0].syncFromConfirmed = false; // checking: date not chosen yet
     h.bank.requests = [];
-    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapped, now: new Date('2026-11-20T10:00:00') });
 
     expect(report.accounts[0]).toMatchObject({ account: 'Cuenta Nómina', status: 'blocked' });
-    expect(report.accounts[0].message).toMatch(/hasta el 15\/09\/2026.*al 16\/09\/2026/);
+    expect(report.accounts[0].message).toMatch(/Elige.*desde qué fecha.*CSV/);
     expect(h.bank.transactionRequests('checking')).toHaveLength(0);
-    expect(connections[0].accounts[0].existingUntil).toBe('2026-09-15');
     expect(connections[0].accounts[0].lastSyncedDate).toBeUndefined();
     // The other account is unaffected.
     expect(report.accounts[1].status).toBe('ok');
   });
 
-  it('syncs once the start date is after the existing history', async () => {
-    h.activities.existing = [{ accountId: 'wf-checking', date: '2026-09-15' }];
-    const { connections: connected } = await connect(h.host, [], '2026-09-16');
+  it('keeps syncing accounts that already synced, even without the flag (earlier versions)', async () => {
+    const { connections: connected } = await connect(h.host);
+    const mapped = mapAll(connected, { confirmDate: false }).map((c) => ({
+      ...c,
+      accounts: c.accounts.map((a) => ({ ...a, lastSyncedDate: '2026-11-15' })),
+    }));
+    const { report } = await runSync({ host: h.host, config, connections: mapped, now: new Date('2026-11-20T10:00:00') });
+    expect(report.accounts.map((a) => a.status)).toEqual(['ok', 'ok']);
+  });
+
+  it('never reads existing Wealthfolio movements (only checkImport and import)', async () => {
+    // The harness host has no activities.search: calling it would throw.
+    const { connections: connected } = await connect(h.host);
     const { report } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
     expect(report.accounts.map((a) => a.status)).toEqual(['ok', 'ok']);
   });
 
-  it('ignores activities this add-on imported itself (they are matched by ID)', async () => {
+  it('does not duplicate its own movements after a reinstall (matched by ID)', async () => {
     const { connections: connected } = await connect(h.host);
     const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
     expect(first.report.imported).toBe(5);
-    // Mappings lost (e.g. add-on reinstalled): a fresh first sync must not be blocked by our own rows.
+    // Mappings lost (e.g. add-on reinstalled) and the same start date chosen again.
     const { connections: again } = await connect(h.host);
     const second = await runSync({ host: h.host, config, connections: mapAll(again), now: new Date('2026-11-21T10:00:00') });
-    expect(second.report.accounts.map((a) => a.status)).toEqual(['ok', 'ok']);
     expect(second.report.imported).toBe(0);
     expect(second.report.duplicates).toBe(5);
+  });
+});
+
+describe('renewing the bank consent', () => {
+  it('keeps held-back movements, the chosen start date and the balance', async () => {
+    h.bank.transactions.checking = [
+      book({ entry_reference: 'P', status: 'PDNG', booking_date: null, transaction_date: '2026-10-20' }),
+    ];
+    const { connections: connected } = await connect(h.host);
+    const synced = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    const before = synced.connections[0].accounts[0];
+    expect(before.retryFrom).toBe('2026-10-20');
+
+    const { connections: renewed } = await connect(h.host, synced.connections);
+    const after = renewed[0].accounts[0];
+    expect(after.uid).toBe('checking-2');
+    expect(after).toMatchObject({
+      retryFrom: '2026-10-20',
+      syncFromConfirmed: true,
+      bankBalance: before.bankBalance,
+      lastSyncedDate: '2026-11-20',
+    });
   });
 });
 

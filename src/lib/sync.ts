@@ -1,7 +1,6 @@
 import type { ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
 import { pickBalance } from './balance';
 import { EnableBankingClient, EnableBankingError } from './enable-banking-client';
-import { firstSafeDate, latestForeignActivityDate } from './guard';
 import { mapTransactions, pendingDate } from './mapping';
 import {
   addDays,
@@ -151,24 +150,15 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       const dateFrom = syncStartDate(account);
       result.dateFrom = dateFrom;
 
-      // First sync into this Wealthfolio account: never overlap what is already there.
-      if (!account.lastSyncedDate) {
-        try {
-          const existing = await latestForeignActivityDate(host.activities, account.wealthfolioAccountId);
-          account.existingUntil = existing ?? undefined;
-          if (existing && existing >= dateFrom) {
-            result.status = 'blocked';
-            result.message =
-              `La cuenta de Wealthfolio ya tiene movimientos hasta el ${formatIsoDate(existing)} que no ` +
-              `importó este add-on (por ejemplo, de un CSV). Para no duplicarlos, cambia «Importar desde» ` +
-              `al ${formatIsoDate(firstSafeDate(existing))} o a una fecha posterior.`;
-            continue;
-          }
-        } catch (error) {
-          result.status = 'error';
-          result.message = `No se pudo comprobar qué movimientos hay ya en Wealthfolio: ${errorMessage(error)}`;
-          continue;
-        }
+      // First sync into this Wealthfolio account: the user must choose the start date.
+      // Wealthfolio only recognises a movement already imported from a CSV when every
+      // value matches, comment included, so an overlapping start would duplicate it.
+      if (!account.lastSyncedDate && !account.syncFromConfirmed) {
+        result.status = 'blocked';
+        result.message =
+          'Elige en «Bancos conectados» desde qué fecha importar esta cuenta: el día siguiente al ' +
+          'último movimiento que ya tengas en esa cuenta de Wealthfolio (por ejemplo, de un CSV).';
+        continue;
       }
 
       if (dateFrom > today) {

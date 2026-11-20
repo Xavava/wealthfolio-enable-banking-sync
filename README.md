@@ -11,8 +11,9 @@ Open Banking regulado (PSD2).
   Wealthfolio salta los que ya importaste. Puedes pulsar el botón todas las veces que quieras.
 - **No pierde movimientos**: los pendientes y los que Wealthfolio rechaza se vuelven a consultar
   en cada sincronización hasta que entran.
-- **No duplica lo que ya tenías**: si la cuenta de Wealthfolio ya tiene movimientos de un CSV u
-  otra fuente, la primera sincronización empieza el día siguiente al último.
+- **Sin solapes con tus CSV**: en la primera sincronización de cada cuenta eliges tú desde qué
+  fecha importar, y la comprobación de saldo avisa si algo no cuadra. El add-on no lee los
+  movimientos que ya tienes en Wealthfolio.
 - **Transferencias internas**: el dinero que mueves entre dos cuentas tuyas sincronizadas se
   registra como transferencia (`TRANSFER_OUT` / `TRANSFER_IN`), no como gasto e ingreso.
 - **Comprobación de saldo**: compara el saldo que da el banco con el de Wealthfolio.
@@ -39,12 +40,12 @@ Enable Banking es gratuito para uso personal con tus propias cuentas (modo «res
 ## 2. Instala el add-on
 
 En Wealthfolio, ve a **Ajustes → Add-ons**, elige instalar desde archivo y selecciona
-`wealthfolio-enable-banking-sync-addon-1.1.0.zip`. Acepta los permisos:
+`wealthfolio-enable-banking-sync-addon-1.2.0.zip`. Acepta los permisos:
 
 | Permiso | Para qué |
 | --- | --- |
 | Cuentas (`getAll`) | Listar tus cuentas de Wealthfolio para asociarlas con las del banco |
-| Actividades (`search`, `checkImport`, `import`) | Ver hasta qué fecha llega cada cuenta, validar e importar los movimientos |
+| Actividades (`checkImport`, `import`) | Validar e importar los movimientos (no puede leer, editar ni borrar los que ya tienes) |
 | Cartera (`getLatestValuations`) | Leer el saldo de cada cuenta en Wealthfolio para compararlo con el del banco |
 | Secretos | Guardar cifrada la clave privada y el token temporal de acceso |
 | Red (`api.enablebanking.com`) | Hablar con Enable Banking |
@@ -64,9 +65,8 @@ Aparecerá **Sincronizar bancos** en la barra lateral.
      *Completar conexión*.
 3. **Bancos conectados**: elige en qué cuenta de Wealthfolio entra cada cuenta bancaria.
    Conviene crear antes en Wealthfolio una cuenta de tipo *Efectivo* (o *Tarjeta de crédito*)
-   por cada cuenta del banco. Elige también desde qué fecha importar la primera vez (por
-   defecto, 90 días atrás). Si la cuenta de Wealthfolio ya tiene movimientos, la fecha se
-   ajusta sola al día siguiente al último (ver más abajo).
+   por cada cuenta del banco. Elige también desde qué fecha importar la primera vez: no hay
+   fecha por defecto y, hasta que la elijas, esa cuenta no se sincroniza (ver más abajo).
 4. Pulsa **Sincronizar ahora**. Verás cuántos movimientos se descargaron, cuántos eran nuevos
    y cuántos ya estaban.
 
@@ -114,16 +114,22 @@ un clic. Se desactiva con la casilla de la tarjeta *Sincronización*.
 ## Si ya importaste movimientos por CSV
 
 Wealthfolio solo reconoce que un movimiento del banco ya está si coinciden **todos** sus datos,
-comentario incluido, y los comentarios de un CSV casi nunca coinciden con los del banco. Para
-no duplicar nada:
+comentario incluido, y los comentarios de un CSV casi nunca coinciden con los del banco. Por eso,
+en la primera sincronización de cada cuenta:
 
-- Al elegir la cuenta de Wealthfolio, el add-on mira la fecha del último movimiento que **no**
-  importó él y propone empezar el día siguiente.
-- Si aun así la fecha de inicio cae dentro de ese historial, esa cuenta no se sincroniza
-  (estado *Revisar fecha*) y el informe dice desde qué día puedes empezar.
+- Mira en Wealthfolio la fecha del último movimiento de esa cuenta y pon como *Importar desde*
+  el **día siguiente**. Si la cuenta está vacía, la fecha desde la que quieras historial.
+- Mientras no elijas la fecha, esa cuenta no se sincroniza (estado *Revisar fecha*).
+- Si te equivocas y se duplica algo, el saldo de Wealthfolio no cuadrará con el del banco y lo
+  verás en *Bancos conectados*.
 
-Esto solo afecta a la primera sincronización de cada cuenta. Después, cada movimiento se
-reconoce por su identificador (`sourceRecordId`).
+El add-on no consulta tus movimientos para averiguarlo él: así no necesita permiso para leer
+el historial de tus cuentas. Esto solo afecta a la primera sincronización (o a cambiar la cuenta
+de destino). Después, cada movimiento se reconoce por su identificador (`sourceRecordId`), también
+si reinstalas el add-on.
+
+Si sigues importando por CSV alguna cuenta que el banco no comparte (por ejemplo, una tarjeta
+prepago), hazlo en una cuenta de Wealthfolio distinta de las que sincroniza el add-on.
 
 ## Comprobación de saldo
 
@@ -168,7 +174,6 @@ Estructura:
 - `src/lib/connect.ts`: autorización del banco (`/auth` → `/sessions`) y renovación.
 - `src/lib/mapping.ts`: conversión de movimientos a `ActivityImport`.
 - `src/lib/sync.ts`: descarga, `checkImport` e `import`, retención de pendientes y rechazados.
-- `src/lib/guard.ts`: fecha del último movimiento ajeno al add-on en una cuenta (evita solapes con CSV).
 - `src/lib/transfers.ts`: emparejado de traspasos sin IBAN.
 - `src/lib/balance.ts`: elección y comparación del saldo.
 - `scripts/package.mjs`: genera el ZIP sin depender de `zip` (funciona en Windows).

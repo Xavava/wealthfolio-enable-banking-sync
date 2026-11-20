@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0] - 2026-11-20
+
+### Changed
+
+- Quitado el permiso `activities.search`: el add-on ya no lee los movimientos que tienes en
+  Wealthfolio (era el permiso de lectura más amplio y solo servía para la primera
+  sincronización). Ahora eliges tú la fecha de inicio de cada cuenta: no hay fecha por defecto
+  y, hasta que la elijas, esa cuenta no se sincroniza. Quedan 10 funciones declaradas.
+
+### Fixed
+
+- Al renovar el consentimiento del banco se perdían los movimientos retenidos (pendientes o
+  rechazados), la fecha de inicio elegida y el último saldo leído.
+
 ## [1.1.0] - 2026-11-20
 
 ### Fixed

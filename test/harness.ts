@@ -130,17 +130,13 @@ export class FakeEnableBanking {
   };
 }
 
-export interface ExistingActivity {
-  accountId: string;
-  date: string;
-  sourceRecordId?: string;
-}
-
-/** In-memory Wealthfolio activities store with sourceRecordId duplicate detection. */
+/**
+ * In-memory Wealthfolio activities store with sourceRecordId duplicate detection.
+ * It offers only checkImport and import, the two functions the manifest declares:
+ * calling anything else (e.g. search) fails the test.
+ */
 export class FakeActivities {
   stored: ActivityImport[] = [];
-  /** Activities already in Wealthfolio from other sources (CSV, manual…). */
-  existing: ExistingActivity[] = [];
   failImport = false;
   /** Rows checkImport rejects. */
   rejectInCheck: (row: ActivityImport) => boolean = () => false;
@@ -151,27 +147,6 @@ export class FakeActivities {
   private isDuplicate(row: ActivityImport) {
     return this.stored.some((s) => s.accountId === row.accountId && s.sourceRecordId === row.sourceRecordId);
   }
-
-  search = async (
-    page: number,
-    pageSize: number,
-    filters: { accountIds?: string | string[] },
-  ) => {
-    const ids = ([] as string[]).concat(filters.accountIds ?? []);
-    const all = [
-      ...this.existing,
-      ...this.stored.map((s) => ({
-        accountId: s.accountId,
-        date: String(s.date),
-        sourceRecordId: `addon:enable-banking-sync:${s.sourceRecordId}`,
-      })),
-    ]
-      .filter((a) => ids.length === 0 || ids.includes(a.accountId))
-      .sort((a, b) => b.date.localeCompare(a.date))
-      // Wealthfolio returns full timestamps (noon keeps the calendar day in any time zone).
-      .map((a) => ({ ...a, date: `${a.date}T12:00:00.000Z` }));
-    return { data: all.slice(page * pageSize, (page + 1) * pageSize), meta: { totalRowCount: all.length } };
-  };
 
   checkImport = async (rows: ActivityImport[]) =>
     rows.map((row) => {
@@ -234,7 +209,7 @@ export function createHarness(): Harness {
       getAll: async () =>
         Object.entries(accountTypes).map(([id, accountType]) => ({ id, accountType, currency: 'EUR', name: id })),
     },
-    activities: activities as unknown as SyncHost['activities'],
+    activities: { checkImport: activities.checkImport, import: activities.import } as unknown as SyncHost['activities'],
   } as unknown as SyncHost;
   return { secrets, bank, activities, accountTypes, host };
 }
@@ -255,10 +230,16 @@ export async function connect(host: SyncHost, existing: BankConnection[] = [], s
   );
 }
 
-export function mapAll(connections: BankConnection[]): BankConnection[] {
+/** Maps both bank accounts to Wealthfolio accounts, as if the user also chose the start date. */
+export function mapAll(connections: BankConnection[], options: { confirmDate?: boolean } = {}): BankConnection[] {
+  const confirmDate = options.confirmDate ?? true;
   return connections.map((c) => ({
     ...c,
-    accounts: c.accounts.map((a) => ({ ...a, wealthfolioAccountId: a.key === 'hash-checking' ? 'wf-checking' : 'wf-savings' })),
+    accounts: c.accounts.map((a) => ({
+      ...a,
+      wealthfolioAccountId: a.key === 'hash-checking' ? 'wf-checking' : 'wf-savings',
+      syncFromConfirmed: confirmDate,
+    })),
   }));
 }
 
