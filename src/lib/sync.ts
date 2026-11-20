@@ -6,6 +6,7 @@ import {
   addDays,
   formatIsoDate,
   isExpired,
+  isValidStartDate,
   minDate,
   toDateOnly,
   toIsoDate,
@@ -158,6 +159,13 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         result.message =
           'Elige en «Bancos conectados» desde qué fecha importar esta cuenta: el día siguiente al ' +
           'último movimiento que ya tengas en esa cuenta de Wealthfolio (por ejemplo, de un CSV).';
+        continue;
+      }
+      if (!account.lastSyncedDate && !isValidStartDate(account.syncFrom, today)) {
+        result.status = 'blocked';
+        result.message =
+          `La fecha de inicio (${formatIsoDate(account.syncFrom)}) no es válida: tiene que ser ` +
+          'posterior al 01/01/2000 y no futura. Corrígela en «Bancos conectados».';
         continue;
       }
 

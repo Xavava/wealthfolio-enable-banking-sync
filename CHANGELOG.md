@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.2] - 2026-11-20
+
+### Fixed
+
+- No se podía escribir el año en «Importar desde»: el campo se guardaba y se redibujaba con cada
+  tecla y el año quedaba como 0026. Ahora solo se guardan fechas completas y válidas (desde el
+  01/01/2000 y no futuras) y se avisa si no lo son. Una fecha imposible guardada antes bloquea
+  esa cuenta con un aviso en lugar de sincronizar.
+- La columna de la fecha se ensanchaba con el texto de ayuda: usaba una clase de estilo
+  (`sm:w-48`) que Wealthfolio no incluye. Revisadas todas las clases del add-on.
+
 ## [1.2.1] - 2026-11-20
 
 ### Changed

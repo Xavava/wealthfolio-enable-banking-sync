@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareBalances, pickBalance } from '../src/lib/balance';
 import { pendingDate } from '../src/lib/mapping';
-import { daysBetween, formatIsoDate, toDateOnly } from '../src/lib/state';
+import { daysBetween, formatIsoDate, isValidStartDate, toDateOnly } from '../src/lib/state';
 import { syncStartDate } from '../src/lib/sync';
 import { findOwnTransferPairs, type TransferCandidate } from '../src/lib/transfers';
 
@@ -112,6 +112,21 @@ describe('dates', () => {
     expect(syncStartDate({ ...account, lastSyncedDate: '2026-11-20', retryFrom: '2026-10-02' })).toBe('2026-10-02');
     expect(syncStartDate({ ...account, lastSyncedDate: '2026-11-20', retryFrom: '2026-08-02' })).toBe('2026-09-01');
     expect(syncStartDate({ ...account, lastSyncedDate: '2026-09-03' })).toBe('2026-09-01');
+  });
+
+  it('accepts only complete, real start dates from 2000 up to today', () => {
+    const today = '2026-11-20';
+    expect(isValidStartDate('2026-01-01', today)).toBe(true);
+    expect(isValidStartDate('2026-11-20', today)).toBe(true);
+    expect(isValidStartDate('2000-01-01', today)).toBe(true);
+    // What a browser reports while the year is being typed.
+    for (const partial of ['0002-01-01', '0020-01-01', '0202-01-01', '0026-01-01']) {
+      expect(isValidStartDate(partial, today)).toBe(false);
+    }
+    expect(isValidStartDate('2026-11-21', today)).toBe(false);
+    expect(isValidStartDate('2026-02-30', today)).toBe(false);
+    expect(isValidStartDate('', today)).toBe(false);
+    expect(isValidStartDate(undefined, today)).toBe(false);
   });
 
   it('reads pending dates and plain or timestamped host dates', () => {

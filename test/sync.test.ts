@@ -185,6 +185,18 @@ describe('first sync needs a start date chosen by the user', () => {
     expect(report.accounts[1].status).toBe('ok');
   });
 
+  it('does not sync with an impossible start date (e.g. year 0026 from a typing slip) or a future one', async () => {
+    const { connections: connected } = await connect(h.host);
+    const mapped = mapAll(connected);
+    mapped[0].accounts[0].syncFrom = '0026-01-01';
+    mapped[0].accounts[1].syncFrom = '2026-12-01';
+    h.bank.requests = [];
+    const { report } = await runSync({ host: h.host, config, connections: mapped, now: new Date('2026-11-20T10:00:00') });
+    expect(report.accounts.map((a) => a.status)).toEqual(['blocked', 'blocked']);
+    expect(report.accounts[0].message).toMatch(/01\/01\/0026.*no es válida/);
+    expect(h.bank.transactionRequests()).toHaveLength(0);
+  });
+
   it('keeps syncing accounts that already synced, even without the flag (earlier versions)', async () => {
     const { connections: connected } = await connect(h.host);
     const mapped = mapAll(connected, { confirmDate: false }).map((c) => ({

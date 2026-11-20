@@ -188,6 +188,18 @@ export function toDateOnly(value: Date | string | null | undefined): string | nu
   return Number.isNaN(date.getTime()) ? null : toIsoDate(date);
 }
 
+/** Earliest start date accepted; anything before is a typing slip (e.g. year 0026). */
+export const MIN_START_DATE = '2000-01-01';
+
+/** A complete YYYY-MM-DD date between MIN_START_DATE and today. */
+export function isValidStartDate(value: string | null | undefined, today: string): boolean {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return false;
+  return value >= MIN_START_DATE && value <= today;
+}
+
 /** YYYY-MM-DD → DD/MM/YYYY, for messages. */
 export function formatIsoDate(iso: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);

@@ -13,13 +13,15 @@ import {
   Input,
 } from '@wealthfolio/ui';
 import { RotateCcw, Unplug } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { compareBalances, isBookedBalance } from '../lib/balance';
 import { maskIban } from '../lib/mapping';
 import {
   addDays,
   daysLeft,
   isExpired,
+  isValidStartDate,
+  MIN_START_DATE,
   toIsoDate,
   type BankConnection,
   type LinkedAccount,
@@ -104,6 +106,69 @@ function accountLabel(account: Account): string {
   return `${account.name} (${account.currency}, ${type})`;
 }
 
+/**
+ * Start date field. While you type a year the browser reports partial dates
+ * (0002, 0020, 0202…); saving each one and redrawing the field would reset the
+ * year being typed. So the field keeps its own draft and only saves complete,
+ * valid dates (or what is there when you leave the field).
+ */
+function StartDateInput({
+  account,
+  today,
+  onCommit,
+}: {
+  account: LinkedAccount;
+  today: string;
+  onCommit: (syncFrom: string) => void;
+}) {
+  const saved = account.syncFromConfirmed ? account.syncFrom : '';
+  const [draft, setDraft] = useState(saved);
+  const [focused, setFocused] = useState(false);
+  const focusedRef = useRef(false);
+
+  // Follow changes saved from elsewhere (e.g. another destination account), but
+  // never overwrite what is being typed.
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(saved);
+  }, [saved]);
+
+  const commit = (value: string) => {
+    if (!isValidStartDate(value, today)) return;
+    if (value !== account.syncFrom || !account.syncFromConfirmed) onCommit(value);
+  };
+
+  return (
+    <>
+      <Input
+        type="date"
+        aria-label="Importar movimientos desde"
+        value={draft}
+        min={MIN_START_DATE}
+        max={today}
+        onFocus={() => {
+          focusedRef.current = true;
+          setFocused(true);
+        }}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          commit(e.target.value);
+        }}
+        onBlur={() => {
+          focusedRef.current = false;
+          setFocused(false);
+          commit(draft);
+        }}
+        disabled={!account.wealthfolioAccountId}
+      />
+      {!focused && draft !== '' && !isValidStartDate(draft, today) && (
+        <p className="text-destructive text-xs">
+          Fecha no válida: tiene que ser posterior al 01/01/2000 y no futura.
+        </p>
+      )}
+    </>
+  );
+}
+
 function AccountRow({
   account,
   wfAccounts,
@@ -162,7 +227,7 @@ function AccountRow({
           </p>
         )}
       </div>
-      <div className="space-y-1 sm:w-48">
+      <div className="space-y-1 sm:w-44">
         {account.lastSyncedAt ? (
           <div className="text-muted-foreground text-xs">
             Última sincronización:
@@ -177,15 +242,10 @@ function AccountRow({
           </div>
         ) : (
           <>
-            <Input
-              type="date"
-              aria-label="Importar movimientos desde"
-              value={account.syncFromConfirmed ? account.syncFrom : ''}
-              max={today}
-              onChange={(e) =>
-                e.target.value && onChange({ syncFrom: e.target.value, syncFromConfirmed: true })
-              }
-              disabled={!account.wealthfolioAccountId}
+            <StartDateInput
+              account={account}
+              today={today}
+              onCommit={(syncFrom) => onChange({ syncFrom, syncFromConfirmed: true })}
             />
             <p className="text-muted-foreground text-xs">Importar desde</p>
             {account.wealthfolioAccountId && !account.syncFromConfirmed && (

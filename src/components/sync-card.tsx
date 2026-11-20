@@ -60,7 +60,7 @@ function ReportView({ report }: { report: SyncReport }) {
                     <div className="text-muted-foreground text-xs">{row.bank}</div>
                     {row.message && (
                       <div
-                        className={`mt-1 max-w-md text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400'}`}
+                        className={`mt-1 max-w-md text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
                       >
                         {row.message}
                       </div>
