@@ -1,0 +1,56 @@
+{
+  "name": "wealthfolio-enable-banking-sync-addon",
+  "version": "1.0.0",
+  "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
+  "type": "module",
+  "main": "dist/addon.js",
+  "keywords": [
+    "wealthfolio",
+    "addon",
+    "enable-banking",
+    "open-banking",
+    "psd2"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "dev:server": "wealthfolio-addon dev",
+    "clean": "rm -rf dist",
+    "package": "mkdir -p dist assets && find dist -name '*.map' -delete && zip -r dist/$npm_package_name-$npm_package_version.zip manifest.json dist/ assets/ README.md -x '*.map'",
+    "bundle": "pnpm clean && pnpm build && pnpm package",
+    "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "type-check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "@wealthfolio/addon-sdk": "^3.13.1",
+    "@wealthfolio/ui": "^3.13.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.70.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@tanstack/react-query": "^5.90.20",
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.2",
+    "@wealthfolio/addon-dev-tools": "^3.13.1",
+    "@wealthfolio/addon-sdk": "^3.13.1",
+    "@wealthfolio/ui": "^3.13.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.70.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.7.0",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "vitest": "3.2.4"
+  }
+}

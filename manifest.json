@@ -1,0 +1,62 @@
+{
+  "id": "enable-banking-sync",
+  "name": "Enable Banking Sync",
+  "version": "1.0.0",
+  "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
+  "author": "Anonymous",
+  "main": "dist/addon.js",
+  "sdkVersion": "3.13.1",
+  "minWealthfolioVersion": "3.13.0",
+  "enabled": true,
+  "contributes": {
+    "routes": [{ "id": "enable-banking-sync" }],
+    "links": {
+      "sidebar": [
+        {
+          "id": "enable-banking-sync",
+          "route": "enable-banking-sync",
+          "label": "Sincronizar bancos",
+          "icon": "bank",
+          "order": 100
+        }
+      ]
+    }
+  },
+  "network": {
+    "allowedHosts": ["api.enablebanking.com"]
+  },
+  "hostDependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "@wealthfolio/addon-sdk": "^3.13.1",
+    "@wealthfolio/ui": "^3.13.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.70.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.7.0"
+  },
+  "permissions": [
+    {
+      "category": "accounts",
+      "functions": ["getAll"],
+      "purpose": "Listar tus cuentas de Wealthfolio para asociar cada cuenta bancaria con una de ellas"
+    },
+    {
+      "category": "activities",
+      "functions": ["checkImport", "import"],
+      "purpose": "Validar e importar los movimientos descargados del banco, sin duplicar los ya importados"
+    },
+    {
+      "category": "secrets",
+      "functions": ["set", "get", "use", "delete"],
+      "purpose": "Guardar cifrada la clave privada de tu aplicación de Enable Banking y el token temporal con el que se firman las peticiones"
+    },
+    {
+      "category": "network",
+      "functions": ["request"],
+      "purpose": "Consultar bancos, autorizaciones y movimientos en api.enablebanking.com"
+    }
+  ],
+  "keywords": ["wealthfolio", "addon", "enable-banking", "open-banking", "psd2", "sync"],
+  "license": "MIT"
+}
