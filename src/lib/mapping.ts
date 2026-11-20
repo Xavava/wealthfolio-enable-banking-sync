@@ -87,7 +87,15 @@ export function counterpartyIban(tx: EbTransaction): string | undefined {
   return normalizeIban(account?.iban);
 }
 
-export function buildComment(tx: EbTransaction): string {
+/** Words for a transfer with no description, in the user's language. */
+export interface TransferLabels {
+  from: string;
+  to: string;
+}
+
+export const DEFAULT_TRANSFER_LABELS: TransferLabels = { from: 'Transferencia desde', to: 'Transferencia a' };
+
+export function buildComment(tx: EbTransaction, labels: TransferLabels = DEFAULT_TRANSFER_LABELS): string {
   const parts: string[] = [];
   const name = counterpartyName(tx);
   const remittance = remittanceText(tx);
@@ -99,7 +107,7 @@ export function buildComment(tx: EbTransaction): string {
   }
   if (parts.length === 0) {
     const iban = counterpartyIban(tx);
-    if (iban) parts.push(`${isIncoming(tx) ? 'Transferencia desde' : 'Transferencia a'} ${maskIban(iban)}`);
+    if (iban) parts.push(`${isIncoming(tx) ? labels.from : labels.to} ${maskIban(iban)}`);
   }
   const comment = parts.join(' · ');
   return comment.length > 500 ? `${comment.slice(0, 497)}...` : comment;
@@ -116,6 +124,8 @@ export interface MappingOptions {
   bankName: string;
   /** Classify incoming "intereses" movements as INTEREST instead of DEPOSIT. */
   detectInterest: boolean;
+  /** Words for a transfer with no description (default: Spanish). */
+  transferLabels?: TransferLabels;
 }
 
 export function classify(
@@ -221,7 +231,7 @@ export async function mapTransactions(
       symbol: '',
       amount,
       currency,
-      comment: buildComment(tx),
+      comment: buildComment(tx, options.transferLabels),
       sourceRecordId,
       metadata: compact({
         source: 'enable-banking',

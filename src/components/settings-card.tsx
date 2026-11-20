@@ -30,10 +30,12 @@ import {
   useApplication,
   type AddonState,
 } from '../hooks/use-addon-data';
-import { errorText, Field } from './ui-bits';
+import { useText } from '../i18n';
+import { Field } from './ui-bits';
 
 export function SettingsCard({ state }: { state: AddonState }) {
   const ctx = useAddonCtx();
+  const { t, rich, errorText } = useText();
   const queryClient = useQueryClient();
   const application = useApplication(state);
   const configured = isConfigured(state);
@@ -59,8 +61,8 @@ export function SettingsCard({ state }: { state: AddonState }) {
   const save = async () => {
     setError(null);
     const id = applicationId.trim();
-    if (!id) return setError('Introduce el ID de la aplicación.');
-    if (!pem.trim() && !state.hasPrivateKey) return setError('Añade la clave privada (.pem).');
+    if (!id) return setError(t('settings.needAppId'));
+    if (!pem.trim() && !state.hasPrivateKey) return setError(t('settings.needKey'));
     setBusy(true);
     const previousKey = await ctx.api.secrets.get(PRIVATE_KEY_SECRET).catch(() => null);
     try {
@@ -76,7 +78,7 @@ export function SettingsCard({ state }: { state: AddonState }) {
       await queryClient.invalidateQueries({ queryKey: QK.state });
       setPem('');
       setEditing(false);
-      ctx.api.toast.success(`Conectado a Enable Banking: ${app.name ?? id}`);
+      ctx.api.toast.success(t('settings.connectedToast', { name: app.name ?? id }));
     } catch (e) {
       // Restore the previous key so a typo does not break a working setup.
       if (pem.trim()) {
@@ -105,53 +107,47 @@ export function SettingsCard({ state }: { state: AddonState }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <KeyRound className="size-4" /> Aplicación de Enable Banking
-          {configured && !application.isError && <Badge variant="success-subtle">Configurada</Badge>}
+          <KeyRound className="size-4" /> {t('settings.title')}
+          {configured && !application.isError && <Badge variant="success-subtle">{t('settings.configured')}</Badge>}
         </CardTitle>
-        <CardDescription>
-          Crea una aplicación en el panel de Enable Banking (entorno <b>Production</b>), vincula tus
-          cuentas con «Link accounts» y añade aquí su ID y la clave privada que descargaste.
-        </CardDescription>
+        <CardDescription>{rich('settings.description', { environment: <b>Production</b> })}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {configured && !editing && (
           <div className="space-y-2 text-sm">
             <div>
-              <span className="text-muted-foreground">ID de aplicación: </span>
+              <span className="text-muted-foreground">{t('settings.appIdLabel')} </span>
               <span className="font-mono">{state.config.applicationId}</span>
             </div>
             {application.isLoading && (
               <div className="text-muted-foreground flex items-center gap-2">
-                <LoaderCircle className="size-4 animate-spin" /> Comprobando credenciales…
+                <LoaderCircle className="size-4 animate-spin" /> {t('settings.checking')}
               </div>
             )}
             {app && (
               <div className="text-muted-foreground">
-                {app.name} · {app.environment ?? 'entorno desconocido'}
-                {app.active === false && ' · inactiva'}
+                {app.name} · {app.environment ?? t('settings.unknownEnvironment')}
+                {app.active === false && ` · ${t('settings.inactive')}`}
               </div>
             )}
             {application.isError && (
               <Alert variant="destructive">
-                <AlertTitle>No se pudo validar la aplicación</AlertTitle>
+                <AlertTitle>{t('settings.validateFailed')}</AlertTitle>
                 <AlertDescription>{errorText(application.error)}</AlertDescription>
               </Alert>
             )}
             {app && redirectUrls.length === 0 && (
               <Alert variant="warning">
-                <AlertTitle>Sin URL de redirección</AlertTitle>
-                <AlertDescription>
-                  Añade una URL de redirección a la aplicación en el panel de Enable Banking (por
-                  ejemplo https://localhost/callback) para poder autorizar bancos.
-                </AlertDescription>
+                <AlertTitle>{t('settings.noRedirectTitle')}</AlertTitle>
+                <AlertDescription>{t('settings.noRedirect')}</AlertDescription>
               </Alert>
             )}
             <div className="flex gap-2 pt-1">
               <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                Cambiar credenciales
+                {t('settings.change')}
               </Button>
               <Button variant="ghost" size="sm" onClick={forget}>
-                Borrar clave privada
+                {t('settings.deleteKey')}
               </Button>
             </div>
           </div>
@@ -159,7 +155,7 @@ export function SettingsCard({ state }: { state: AddonState }) {
 
         {editing && (
           <div className="space-y-4">
-            <Field label="ID de la aplicación" htmlFor="eb-app-id" hint="Es el nombre del archivo .pem sin la extensión.">
+            <Field label={t('settings.appIdField')} htmlFor="eb-app-id" hint={t('settings.appIdHint')}>
               <Input
                 id="eb-app-id"
                 placeholder="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -169,12 +165,8 @@ export function SettingsCard({ state }: { state: AddonState }) {
               />
             </Field>
             <Field
-              label="Clave privada (.pem)"
-              hint={
-                state.hasPrivateKey
-                  ? 'Ya hay una clave guardada. Déjalo vacío para conservarla.'
-                  : 'Se guarda cifrada en el almacén de credenciales del sistema; nunca sale de tu equipo.'
-              }
+              label={t('settings.keyField')}
+              hint={state.hasPrivateKey ? t('settings.keyHintSaved') : t('settings.keyHintNew')}
             >
               <input
                 type="file"
@@ -198,11 +190,11 @@ export function SettingsCard({ state }: { state: AddonState }) {
             <div className="flex gap-2">
               <Button onClick={save} disabled={busy}>
                 {busy && <LoaderCircle className="size-4 animate-spin" />}
-                Guardar y comprobar
+                {t('settings.save')}
               </Button>
               {configured && (
                 <Button variant="ghost" onClick={() => setEditing(false)} disabled={busy}>
-                  Cancelar
+                  {t('common.cancel')}
                 </Button>
               )}
             </div>

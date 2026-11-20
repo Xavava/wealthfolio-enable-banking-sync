@@ -35,12 +35,14 @@ import {
   useWealthfolioAccounts,
   type AddonState,
 } from '../hooks/use-addon-data';
-import { errorText, formatDate, formatDateTime, formatMoney, NativeSelect } from './ui-bits';
+import { useText } from '../i18n';
+import { NativeSelect } from './ui-bits';
 
 /** Many banks only give ~90 days of history to an unattended request. */
 const TYPICAL_HISTORY_DAYS = 90;
 
 function BalanceLine({ account, valuation }: { account: LinkedAccount; valuation?: AccountValuation }) {
+  const { t, formatDay, formatMoney } = useText();
   const bank = account.bankBalance;
   if (!bank || !account.wealthfolioAccountId) return null;
   const check = compareBalances(
@@ -52,55 +54,58 @@ function BalanceLine({ account, valuation }: { account: LinkedAccount; valuation
   return (
     <div className="bg-muted/40 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-3 py-2 text-xs">
       <span>
-        Banco: <b className="tabular-nums">{formatMoney(Number(bank.amount), bank.currency)}</b>{' '}
+        {t('connections.balanceBank')} <b className="tabular-nums">{formatMoney(Number(bank.amount), bank.currency)}</b>{' '}
         <span className="text-muted-foreground">
-          ({bank.type}, {formatDate(bankDate)})
+          ({bank.type}, {formatDay(bankDate)})
         </span>
       </span>
       {valuation && (
         <span>
-          Wealthfolio:{' '}
+          {t('connections.balanceWealthfolio')}{' '}
           <b className="tabular-nums">{formatMoney(valuation.cashBalance, valuation.accountCurrency)}</b>{' '}
-          <span className="text-muted-foreground">({formatDate(valuation.valuationDate)})</span>
+          <span className="text-muted-foreground">({formatDay(valuation.valuationDate)})</span>
         </span>
       )}
-      {check.state === 'match' && <Badge variant="success-subtle">Cuadra</Badge>}
+      {check.state === 'match' && <Badge variant="success-subtle">{t('connections.balanceMatch')}</Badge>}
       {check.state === 'match-inverted' && (
-        <Badge variant="success-subtle">Cuadra (el banco lo muestra con el signo contrario)</Badge>
+        <Badge variant="success-subtle">{t('connections.balanceMatchInverted')}</Badge>
       )}
       {check.state === 'mismatch' && (
         <>
           <Badge variant="warning-subtle">
-            Descuadre: {formatMoney(check.difference, bank.currency, true)}
+            {t('connections.balanceMismatch', { difference: formatMoney(check.difference, bank.currency, true) })}
           </Badge>
           <span className="text-muted-foreground w-full">
-            Puede haber movimientos duplicados con un CSV (fecha de inicio solapada), faltar
-            historial anterior a la fecha de inicio, haber movimientos pendientes o rechazados, o
-            Wealthfolio no haber terminado de recalcular.
-            {!isBookedBalance(bank) && ' El banco solo da saldo disponible, que puede incluir crédito o retenciones.'}
+            {t('connections.balanceMismatchHelp')}
+            {!isBookedBalance(bank) && ` ${t('connections.balanceAvailableOnly')}`}
           </span>
         </>
       )}
       {check.state === 'unknown' && check.reason === 'currency' && (
-        <span className="text-muted-foreground">Divisas distintas: no se compara.</span>
+        <span className="text-muted-foreground">{t('connections.balanceCurrencies')}</span>
       )}
     </div>
   );
 }
 
 function ConsentBadge({ connection }: { connection: BankConnection }) {
-  if (isExpired(connection)) return <Badge variant="destructive-subtle">Consentimiento caducado</Badge>;
+  const { t, formatDay } = useText();
+  if (isExpired(connection)) return <Badge variant="destructive-subtle">{t('connections.consentExpired')}</Badge>;
   const days = daysLeft(connection);
-  if (days <= 7) return <Badge variant="warning-subtle">Caduca en {days} día(s)</Badge>;
-  return <Badge variant="success-subtle">Válido hasta {formatDate(connection.validUntil)}</Badge>;
+  if (days <= 7) return <Badge variant="warning-subtle">{t('connections.expiresIn', { n: days })}</Badge>;
+  return (
+    <Badge variant="success-subtle">
+      {t('connections.validUntil', { date: formatDay(toIsoDate(new Date(connection.validUntil))) })}
+    </Badge>
+  );
 }
 
-function accountLabel(account: Account): string {
+function accountLabel(account: Account, t: (key: string) => string): string {
   const types: Record<string, string> = {
-    CASH: 'efectivo',
-    CREDIT_CARD: 'tarjeta',
-    SECURITIES: 'inversión',
-    CRYPTOCURRENCY: 'cripto',
+    CASH: t('connections.typeCash'),
+    CREDIT_CARD: t('connections.typeCard'),
+    SECURITIES: t('connections.typeSecurities'),
+    CRYPTOCURRENCY: t('connections.typeCrypto'),
   };
   const type = types[account.accountType] ?? account.accountType.toLowerCase();
   return `${account.name} (${account.currency}, ${type})`;
@@ -121,6 +126,7 @@ function StartDateInput({
   today: string;
   onCommit: (syncFrom: string) => void;
 }) {
+  const { t, formatDay } = useText();
   const saved = account.syncFromConfirmed ? account.syncFrom : '';
   const [draft, setDraft] = useState(saved);
   const [focused, setFocused] = useState(false);
@@ -141,7 +147,7 @@ function StartDateInput({
     <>
       <Input
         type="date"
-        aria-label="Importar movimientos desde"
+        aria-label={t('connections.startDateLabel')}
         value={draft}
         min={MIN_START_DATE}
         max={today}
@@ -161,9 +167,7 @@ function StartDateInput({
         disabled={!account.wealthfolioAccountId}
       />
       {!focused && draft !== '' && !isValidStartDate(draft, today) && (
-        <p className="text-destructive text-xs">
-          Fecha no válida: tiene que ser posterior al 01/01/2000 y no futura.
-        </p>
+        <p className="text-destructive text-xs">{t('connections.invalidDate', { min: formatDay(MIN_START_DATE) })}</p>
       )}
     </>
   );
@@ -184,11 +188,12 @@ function AccountRow({
   onChange: (patch: Partial<LinkedAccount>) => void;
   onChooseTarget: (wealthfolioAccountId: string | null) => void;
 }) {
+  const { t, language, formatDay, formatWhen } = useText();
   const target = wfAccounts.find((a) => a.id === account.wealthfolioAccountId);
   const currencyMismatch = target && account.currency && target.currency !== account.currency;
   const sorted = [...wfAccounts].sort((a, b) => {
     const score = (x: Account) => (x.currency === account.currency ? 0 : 1) + (x.accountType === 'SECURITIES' ? 1 : 0);
-    return score(a) - score(b) || a.name.localeCompare(b.name, 'es');
+    return score(a) - score(b) || a.name.localeCompare(b.name, language);
   });
   const today = toIsoDate(new Date());
   const beyondTypicalHistory =
@@ -205,38 +210,36 @@ function AccountRow({
       </div>
       <div className="space-y-1">
         <NativeSelect
-          aria-label={`Cuenta de Wealthfolio para ${account.name}`}
+          aria-label={t('connections.targetLabel', { account: account.name })}
           value={account.wealthfolioAccountId ?? ''}
           onChange={(e) => onChooseTarget(e.target.value || null)}
         >
-          <option value="">No sincronizar</option>
+          <option value="">{t('connections.noSync')}</option>
           {sorted.map((wf) => (
             <option key={wf.id} value={wf.id}>
-              {accountLabel(wf)}
+              {accountLabel(wf, t)}
             </option>
           ))}
         </NativeSelect>
         {currencyMismatch && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            La cuenta del banco está en {account.currency} y la de Wealthfolio en {target.currency}.
+            {t('connections.currencyMismatch', { bankCurrency: account.currency, wealthfolioCurrency: target.currency })}
           </p>
         )}
         {duplicateTarget && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            Otra cuenta bancaria también se sincroniza con esta cuenta de Wealthfolio.
-          </p>
+          <p className="text-xs text-amber-600 dark:text-amber-400">{t('connections.duplicateTarget')}</p>
         )}
       </div>
       <div className="space-y-1 sm:w-44">
         {account.lastSyncedAt ? (
           <div className="text-muted-foreground text-xs">
-            Última sincronización:
+            {t('connections.lastSync')}
             <br />
-            {formatDateTime(account.lastSyncedAt)}
+            {formatWhen(account.lastSyncedAt)}
             {account.retryFrom && (
               <>
                 <br />
-                Se vuelve a revisar desde el {formatDate(account.retryFrom)}
+                {t('connections.retryFrom', { date: formatDay(account.retryFrom) })}
               </>
             )}
           </div>
@@ -247,18 +250,13 @@ function AccountRow({
               today={today}
               onCommit={(syncFrom) => onChange({ syncFrom, syncFromConfirmed: true })}
             />
-            <p className="text-muted-foreground text-xs">Importar desde</p>
+            <p className="text-muted-foreground text-xs">{t('connections.importFrom')}</p>
             {account.wealthfolioAccountId && !account.syncFromConfirmed && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                Elige el día siguiente al último movimiento que ya tengas en esta cuenta de
-                Wealthfolio (por ejemplo, de un CSV) para no duplicarlo. Si está vacía, la fecha
-                desde la que quieras historial.
-              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">{t('connections.chooseStart')}</p>
             )}
             {account.wealthfolioAccountId && beyondTypicalHistory && (
               <p className="text-muted-foreground text-xs">
-                Muchos bancos solo dan {TYPICAL_HISTORY_DAYS} días de historial, salvo en la hora
-                siguiente a autorizar: sincroniza nada más conectar o renovar el banco.
+                {t('connections.historyHint', { days: TYPICAL_HISTORY_DAYS })}
               </p>
             )}
           </>
@@ -273,13 +271,21 @@ function AccountRow({
 
 /** What the bank gave the last time the add-on asked for the longest history. */
 function HistoryLine({ account }: { account: LinkedAccount }) {
+  const { t, formatDay, formatWhen } = useText();
   const history = account.history;
   if (!history || !account.wealthfolioAccountId) return null;
   return (
     <p className="text-muted-foreground mt-2 text-xs">
       {history.earliest
-        ? `Historial que dio el banco: desde el ${formatDate(history.earliest)} (pedido desde el ${formatDate(history.requestedFrom)}; ${formatDateTime(history.checkedAt)}).`
-        : `El banco no devolvió ningún movimiento desde el ${formatDate(history.requestedFrom)} (${formatDateTime(history.checkedAt)}).`}
+        ? t('connections.historyGiven', {
+            earliest: formatDay(history.earliest),
+            requested: formatDay(history.requestedFrom),
+            checked: formatWhen(history.checkedAt),
+          })
+        : t('connections.historyNone', {
+            requested: formatDay(history.requestedFrom),
+            checked: formatWhen(history.checkedAt),
+          })}
     </p>
   );
 }
@@ -292,6 +298,7 @@ export function ConnectionsCard({
   onReconnect: (aspsp: { name: string; country: string }) => void;
 }) {
   const ctx = useAddonCtx();
+  const { t, errorText } = useText();
   const queryClient = useQueryClient();
   const client = useClient(state);
   const saveConnections = useSaveConnections();
@@ -348,7 +355,7 @@ export function ConnectionsCard({
       }
       await saveConnections(state.connections.filter((c) => c.sessionId !== connection.sessionId));
       await queryClient.invalidateQueries({ queryKey: QK.state });
-      ctx.api.toast.success(`${connection.aspsp.name} desconectado`);
+      ctx.api.toast.success(t('connections.disconnectedToast', { bank: connection.aspsp.name }));
     } catch (e) {
       setError(errorText(e));
     }
@@ -359,19 +366,13 @@ export function ConnectionsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Bancos conectados</CardTitle>
-        <CardDescription>
-          Elige en qué cuenta de Wealthfolio entra cada cuenta del banco. Las cuentas en «No
-          sincronizar» se ignoran.
-        </CardDescription>
+        <CardTitle className="text-base">{t('connections.title')}</CardTitle>
+        <CardDescription>{t('connections.description', { none: t('connections.noSync') })}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {wfAccounts.isSuccess && usable.length === 0 && (
           <Alert variant="warning">
-            <AlertDescription>
-              No tienes cuentas de Wealthfolio en modo transacciones. Crea una cuenta de tipo
-              efectivo (o tarjeta) en Wealthfolio y vuelve aquí.
-            </AlertDescription>
+            <AlertDescription>{t('connections.noAccounts')}</AlertDescription>
           </Alert>
         )}
         {state.connections.map((connection) => (
@@ -383,21 +384,21 @@ export function ConnectionsCard({
               </div>
               {confirming === connection.sessionId ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span>¿Desconectar? Lo ya importado se conserva.</span>
+                  <span>{t('connections.confirmDisconnect')}</span>
                   <Button size="sm" variant="destructive" onClick={() => disconnect(connection)}>
-                    Sí, desconectar
+                    {t('connections.yesDisconnect')}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                    Cancelar
+                    {t('common.cancel')}
                   </Button>
                 </div>
               ) : (
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => onReconnect(connection.aspsp)}>
-                    <RotateCcw className="size-4" /> Renovar
+                    <RotateCcw className="size-4" /> {t('connections.renew')}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setConfirming(connection.sessionId)}>
-                    <Unplug className="size-4" /> Desconectar
+                    <Unplug className="size-4" /> {t('connections.disconnect')}
                   </Button>
                 </div>
               )}

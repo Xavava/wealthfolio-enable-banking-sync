@@ -12,6 +12,7 @@ import {
   mapAll,
   type Harness,
 } from './harness';
+import { errorEs, textEs } from './i18n';
 
 let h: Harness;
 
@@ -33,7 +34,7 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
       ['Cuenta Nómina', 'ok', 4, 3, 1],
       ['Cuenta Ahorro', 'ok', 2, 2, 0],
     ]);
-    expect(first.report.accounts[0].notes?.join(' ')).toMatch(/pendiente/);
+    expect(first.report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/pendiente/);
     expect(h.activities.stored.map((r) => `${r.accountId}:${r.activityType}`)).toEqual([
       'wf-checking:WITHDRAWAL',
       'wf-checking:TRANSFER_OUT',
@@ -88,7 +89,7 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
     const { connections: connected } = await connect(h.host);
     h.activities.failImport = true;
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
-    expect(report.importError).toMatch(/boom/);
+    expect(textEs(report.importError)).toMatch(/boom/);
     expect(report.accounts.every((a) => a.status === 'error')).toBe(true);
     expect(connections[0].accounts.every((a) => !a.lastSyncedDate)).toBe(true);
   });
@@ -104,7 +105,7 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
     const { connections: connected } = await connect(h.host);
     h.activities.failCheckCall = true;
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
-    expect(report.importError).toBe('Wealthfolio no pudo validar los movimientos: No se pudo completar la operación. [internal]');
+    expect(textEs(report.importError)).toBe('Wealthfolio no pudo validar los movimientos: No se pudo completar la operación. [internal]');
     expect(report.accounts.map((a) => a.status)).toEqual(['error', 'error']);
     expect(report.imported).toBe(0);
     // Nothing advances, so the next sync reads the same movements again…
@@ -116,7 +117,8 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
   it('reports a clear error when the private key does not match the application', async () => {
     const other = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
     h.secrets.set(PRIVATE_KEY_SECRET, other.export({ type: 'pkcs8', format: 'pem' }).toString());
-    await expect(new EnableBankingClient(h.host, APP_ID).getApplication()).rejects.toThrow(/Invalid JWT.*clave privada/s);
+    const error = await new EnableBankingClient(h.host, APP_ID).getApplication().catch((e: unknown) => e);
+    expect(errorEs(error)).toMatch(/Invalid JWT.*clave privada/s);
   });
 });
 
@@ -136,7 +138,7 @@ describe('movements are never lost', () => {
     const checking = first.connections[0].accounts[0];
     expect(checking.lastSyncedDate).toBe('2026-11-20');
     expect(checking.retryFrom).toBe('2026-10-01');
-    expect(first.report.accounts[0].notes?.join(' ')).toMatch(/rechazado.*volverán a intentar/);
+    expect(first.report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/rechazado.*volverán a intentar/);
 
     // A week of overlap would start on 2026-11-14 and lose it; the hold keeps it.
     h.bank.requests = [];
@@ -191,7 +193,7 @@ describe('movements are never lost', () => {
     const { connections: connected } = await connect(h.host, [], '2026-05-01');
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
     expect(connections[0].accounts[0].retryFrom).toBe('2026-08-23'); // today - 89 days
-    expect(report.accounts[0].notes?.join(' ')).toMatch(/01\/06\/2026.*ya no se volverán a consultar/);
+    expect(report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/01\/06\/2026.*ya no se volverán a consultar/);
   });
 });
 
@@ -204,7 +206,7 @@ describe('first sync needs a start date chosen by the user', () => {
     const { report, connections } = await runSync({ host: h.host, config, connections: mapped, now: new Date('2026-11-20T10:00:00') });
 
     expect(report.accounts[0]).toMatchObject({ account: 'Cuenta Nómina', status: 'blocked' });
-    expect(report.accounts[0].message).toMatch(/Elige.*desde qué fecha.*CSV/);
+    expect(textEs(report.accounts[0].message)).toMatch(/Elige.*desde qué fecha.*CSV/);
     expect(h.bank.transactionRequests('checking')).toHaveLength(0);
     expect(connections[0].accounts[0].lastSyncedDate).toBeUndefined();
     // The other account is unaffected.
@@ -219,7 +221,7 @@ describe('first sync needs a start date chosen by the user', () => {
     h.bank.requests = [];
     const { report } = await runSync({ host: h.host, config, connections: mapped, now: new Date('2026-11-20T10:00:00') });
     expect(report.accounts.map((a) => a.status)).toEqual(['blocked', 'blocked']);
-    expect(report.accounts[0].message).toMatch(/01\/01\/0026.*no es válida/);
+    expect(textEs(report.accounts[0].message)).toMatch(/01\/01\/0026.*no es válida/);
     expect(h.bank.transactionRequests()).toHaveLength(0);
   });
 
@@ -268,7 +270,7 @@ describe('how much history the bank gives', () => {
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
 
     expect(report.accounts[0]).toMatchObject({ status: 'ok', fetched: 2, imported: 2 });
-    expect(report.accounts[0].notes?.join(' ')).toMatch(/movimientos desde el 26\/08\/2026 \(pediste desde el 01\/08\/2026\)/);
+    expect(report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/movimientos desde el 26\/08\/2026 \(pediste desde el 01\/08\/2026\)/);
     expect(connections[0].accounts[0].history).toMatchObject({ requestedFrom: '2026-08-01', earliest: '2026-08-26' });
     expect(connections[0].accounts[0].lastSyncedDate).toBe('2026-11-20');
   });
@@ -285,7 +287,7 @@ describe('how much history the bank gives', () => {
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
 
     expect(report.accounts[0].status).toBe('blocked');
-    expect(report.accounts[0].message).toMatch(/no ha devuelto ningún movimiento desde el 01\/08\/2026.*no se da por sincronizada/i);
+    expect(textEs(report.accounts[0].message)).toMatch(/no ha devuelto ningún movimiento desde el 01\/08\/2026.*no se da por sincronizada/i);
     expect(connections[0].accounts[0].lastSyncedDate).toBeUndefined();
     expect(connections[0].accounts[0].history).toMatchObject({ requestedFrom: '2026-08-01', earliest: undefined });
     // The next sync tries the same range again.
@@ -314,7 +316,7 @@ describe('when Wealthfolio does not let requests out', () => {
     h.bank.blocked = true;
     const error = await new EnableBankingClient(h.host, APP_ID).getApplication().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(NetworkBlockedError);
-    const message = (error as Error).message;
+    const message = errorEs(error);
     expect(message).toMatch(/Ajustes → Complementos/);
     expect(message).toMatch(/marca api\.enablebanking\.com en «Hosts de red»/);
     expect(message).toMatch(/\(Detalle: No se pudo completar la operación\. \[internal\]\)$/);
@@ -325,8 +327,8 @@ describe('when Wealthfolio does not let requests out', () => {
     h.bank.blocked = true;
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
     expect(report.accounts.map((a) => a.status)).toEqual(['error', 'error']);
-    expect(report.accounts[0].message).toMatch(/Hosts de red/);
-    expect(report.accounts[1].message).toMatch(/^No se ha consultado/);
+    expect(textEs(report.accounts[0].message)).toMatch(/Hosts de red/);
+    expect(textEs(report.accounts[1].message)).toMatch(/^No se ha consultado/);
     expect(h.bank.blockedAttempts).toBe(1);
     expect(connections[0].accounts.every((a) => !a.lastSyncedDate)).toBe(true);
   });
@@ -335,8 +337,8 @@ describe('when Wealthfolio does not let requests out', () => {
     h.bank.balances.checking = 'error'; // HTTP 500 from the API
     const { connections: connected } = await connect(h.host);
     const { report } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
-    expect(report.accounts[0].notes?.join(' ')).toMatch(/ASPSP error/);
-    expect(report.accounts[0].notes?.join(' ')).not.toMatch(/Hosts de red/);
+    expect(report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/ASPSP error/);
+    expect(report.accounts[0].notes?.map(textEs).join(' ')).not.toMatch(/Hosts de red/);
   });
 });
 
@@ -418,7 +420,7 @@ describe('bank balance', () => {
     const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
     expect(report.accounts[0].status).toBe('ok');
     expect(report.accounts[0].imported).toBe(3);
-    expect(report.accounts[0].notes?.join(' ')).toMatch(/No se pudo leer el saldo/);
+    expect(report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/No se pudo leer el saldo/);
     expect(connections[0].accounts[0].bankBalance).toBeUndefined();
   });
 });

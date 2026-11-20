@@ -1,4 +1,5 @@
 import type { HostAPI } from '@wealthfolio/addon-sdk';
+import type { Text } from './messages';
 
 export interface AddonConfig {
   applicationId: string;
@@ -88,7 +89,7 @@ export interface InvalidRowInfo {
   date: string;
   amount: string;
   comment: string;
-  errors: string[];
+  errors: Text[];
 }
 
 export type SyncStatus = 'ok' | 'error' | 'reconnect' | 'blocked';
@@ -106,9 +107,10 @@ export interface SyncAccountResult {
   /** Movements paired as internal transfers by amount and date (no IBAN). */
   ownTransfers?: number;
   dateFrom?: string;
-  message?: string;
+  /** Translatable message, or plain text in reports saved before 1.4.0. */
+  message?: Text;
   /** Extra notes (held-back movements, balance problems…). */
-  notes?: string[];
+  notes?: Text[];
 }
 
 export interface SyncReport {
@@ -120,7 +122,7 @@ export interface SyncReport {
   ownTransfers?: number;
   accounts: SyncAccountResult[];
   invalidRows: InvalidRowInfo[];
-  importError?: string;
+  importError?: Text;
 }
 
 const KEYS = {

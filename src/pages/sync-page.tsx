@@ -4,18 +4,19 @@ import { ConnectBankCard } from '../components/connect-bank-card';
 import { ConnectionsCard } from '../components/connections-card';
 import { SettingsCard } from '../components/settings-card';
 import { SyncCard } from '../components/sync-card';
-import { errorText } from '../components/ui-bits';
+import { useText } from '../i18n';
 import { isConfigured, useAddonState } from '../hooks/use-addon-data';
 
 export function SyncPage() {
+  const { t, errorText } = useText();
   const { data: state, isLoading, error } = useAddonState();
   const [reconnect, setReconnect] = useState<{ name: string; country: string } | null>(null);
 
   return (
     <Page>
       <PageHeader
-        heading="Sincronizar bancos"
-        text="Importa con un botón los movimientos de tus cuentas bancarias mediante Enable Banking (PSD2)."
+        heading={t('page.heading')}
+        text={t('page.text')}
       />
       <PageContent>
         <div className="mx-auto max-w-4xl space-y-6 pb-10">

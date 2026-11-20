@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AddonContext, AddonEnableFunction } from '@wealthfolio/addon-sdk';
 import { AddonCtx } from './hooks/use-addon-data';
+import { registerAddonTranslations } from './i18n';
 import { SyncPage } from './pages/sync-page';
 
 // The host owns a single React root per addon and mounts the route `component`
@@ -21,6 +22,8 @@ const AddonRoute = () => {
 
 const enable: AddonEnableFunction = (ctx) => {
   addonCtx = ctx;
+  // Before the first render, so no untranslated keys flash on screen.
+  registerAddonTranslations();
 
   // The route `id` MUST match `contributes.routes[].id` in manifest.json.
   ctx.router.add({

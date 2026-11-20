@@ -23,20 +23,21 @@ import {
   useSaveConnections,
   type AddonState,
 } from '../hooks/use-addon-data';
-import { CopyField, errorText, Field, NativeSelect } from './ui-bits';
+import { useText } from '../i18n';
+import { CopyField, Field, NativeSelect } from './ui-bits';
 
 const PSD2_COUNTRIES = [
   'ES', 'PT', 'FR', 'IT', 'DE', 'NL', 'BE', 'LU', 'IE', 'AT', 'FI', 'SE', 'DK', 'NO', 'IS',
   'EE', 'LV', 'LT', 'PL', 'CZ', 'SK', 'SI', 'HR', 'HU', 'RO', 'BG', 'GR', 'CY', 'MT', 'LI', 'GB',
 ];
 
-const regionNames = (() => {
+function regionNamesFor(language: string): Intl.DisplayNames | null {
   try {
-    return new Intl.DisplayNames(['es'], { type: 'region' });
+    return new Intl.DisplayNames([language], { type: 'region' });
   } catch {
     return null;
   }
-})();
+}
 
 export const DEFAULT_HISTORY_DAYS = 90;
 
@@ -51,6 +52,8 @@ export function ConnectBankCard({
   onReconnectHandled?: () => void;
 }) {
   const ctx = useAddonCtx();
+  const { t, rich, language, errorText } = useText();
+  const regionNames = useMemo(() => regionNamesFor(language), [language]);
   const queryClient = useQueryClient();
   const client = useClient(state);
   const application = useApplication(state);
@@ -84,7 +87,7 @@ export function ConnectBankCard({
       const list = await client!.getAspsps(country);
       return list
         .filter((a) => !a.psu_types || a.psu_types.includes('personal'))
-        .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
     enabled: Boolean(client),
     staleTime: 60 * 60 * 1000,
@@ -149,7 +152,7 @@ export function ConnectBankCard({
       setRedirectInput('');
       onReconnectHandled?.();
       ctx.api.toast.success(
-        `${result.connection.aspsp.name}: ${result.connection.accounts.length} cuenta(s) conectada(s)`,
+        t('connect.connectedToast', { bank: result.connection.aspsp.name, n: result.connection.accounts.length }),
       );
     } catch (e) {
       setError(errorText(e));
@@ -169,18 +172,16 @@ export function ConnectBankCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Landmark className="size-4" /> {reconnect ? `Renovar ${reconnect.name}` : 'Conectar un banco'}
+          <Landmark className="size-4" />{' '}
+          {reconnect ? t('connect.titleRenew', { bank: reconnect.name }) : t('connect.titleNew')}
         </CardTitle>
-        <CardDescription>
-          Autoriza el acceso de solo lectura a tus cuentas en la web de tu banco (PSD2). El acceso
-          caduca pasado el plazo del consentimiento y habrá que renovarlo.
-        </CardDescription>
+        <CardDescription>{t('connect.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!pending && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="País">
+              <Field label={t('connect.country')}>
                 <NativeSelect value={country} onChange={(e) => { setCountry(e.target.value); setBankName(''); }}>
                   {PSD2_COUNTRIES.map((code) => (
                     <option key={code} value={code}>
@@ -189,15 +190,15 @@ export function ConnectBankCard({
                   ))}
                 </NativeSelect>
               </Field>
-              <Field label="Buscar banco">
-                <Input placeholder="Santander, BBVA, ING…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <Field label={t('connect.search')}>
+                <Input placeholder={t('connect.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} />
               </Field>
             </div>
 
-            <Field label="Banco">
+            <Field label={t('connect.bank')}>
               {aspsps.isLoading ? (
                 <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <LoaderCircle className="size-4 animate-spin" /> Cargando bancos…
+                  <LoaderCircle className="size-4 animate-spin" /> {t('connect.loadingBanks')}
                 </div>
               ) : aspsps.isError ? (
                 <Alert variant="destructive">
@@ -216,7 +217,7 @@ export function ConnectBankCard({
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Duración del consentimiento (días)" hint={selectedBank ? `Máximo para este banco: ${maxDays} días.` : undefined}>
+              <Field label={t('connect.consentDays')} hint={selectedBank ? t('connect.consentMax', { n: maxDays }) : undefined}>
                 <Input
                   type="number"
                   min={1}
@@ -225,7 +226,7 @@ export function ConnectBankCard({
                   onChange={(e) => setConsentDays(Number(e.target.value) || 1)}
                 />
               </Field>
-              <Field label="URL de redirección" hint="Debe estar registrada en tu aplicación de Enable Banking.">
+              <Field label={t('connect.redirect')} hint={t('connect.redirectHint')}>
                 {redirectUrls.length > 0 ? (
                   <NativeSelect value={redirectUrl} onChange={(e) => setRedirectUrl(e.target.value)}>
                     {redirectUrls.map((url) => (
@@ -242,7 +243,7 @@ export function ConnectBankCard({
 
             <Button onClick={start} disabled={!selectedBank || !redirectUrl || busy !== null}>
               {busy === 'start' && <LoaderCircle className="size-4 animate-spin" />}
-              Generar enlace de autorización
+              {t('connect.generate')}
             </Button>
           </>
         )}
@@ -251,18 +252,19 @@ export function ConnectBankCard({
           <div className="space-y-4">
             <ol className="list-decimal space-y-3 ps-5 text-sm">
               <li>
-                Copia este enlace y ábrelo en tu navegador para autorizar <b>{pending.aspsp.name}</b>:
+                {rich('connect.step1', { bank: <b>{pending.aspsp.name}</b> })}
                 <div className="mt-2">
                   <CopyField value={pending.url} />
                 </div>
               </li>
               <li>
-                Al terminar, el banco te llevará a <span className="font-mono">{pending.redirectUrl}</span>.
-                Es normal que esa página no cargue: copia la URL completa de la barra de direcciones
-                (contiene <span className="font-mono">?code=…</span>).
+                {rich('connect.step2', {
+                  url: <span className="font-mono">{pending.redirectUrl}</span>,
+                  code: <span className="font-mono">?code=…</span>,
+                })}
               </li>
               <li>
-                Pégala aquí:
+                {t('connect.step3')}
                 <div className="mt-2 flex gap-2">
                   <Input
                     placeholder={`${pending.redirectUrl}?state=…&code=…`}
@@ -272,13 +274,13 @@ export function ConnectBankCard({
                   />
                   <Button onClick={complete} disabled={!redirectInput.trim() || busy !== null}>
                     {busy === 'complete' && <LoaderCircle className="size-4 animate-spin" />}
-                    Completar conexión
+                    {t('connect.complete')}
                   </Button>
                 </div>
               </li>
             </ol>
             <Button variant="ghost" size="sm" onClick={cancelPending} disabled={busy !== null}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
           </div>
         )}

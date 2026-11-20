@@ -1,6 +1,7 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createEnableBankingJwt, pemToPkcs8Der } from '../src/lib/jwt';
+import { errorEs } from './i18n';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const pkcs8Pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
@@ -48,9 +49,17 @@ describe('createEnableBankingJwt', () => {
   });
 
   it('rejects non-PEM and encrypted keys with a clear message', () => {
-    expect(() => pemToPkcs8Der('not a key')).toThrow(/PEM/);
-    expect(() =>
-      pemToPkcs8Der('-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----'),
-    ).toThrow(/cifrada/);
+    const thrown = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (error) {
+        return errorEs(error);
+      }
+      throw new Error('did not throw');
+    };
+    expect(thrown(() => pemToPkcs8Der('not a key'))).toMatch(/PEM/);
+    expect(
+      thrown(() => pemToPkcs8Der('-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----')),
+    ).toMatch(/cifrada/);
   });
 });

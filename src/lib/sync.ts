@@ -7,12 +7,13 @@ import {
   NetworkBlockedError,
   type TransactionsStrategy,
 } from './enable-banking-client';
-import { mapTransactions, pendingDate, transactionDate } from './mapping';
+import { mapTransactions, pendingDate, transactionDate, type TransferLabels } from './mapping';
+import { errorToText, msg, type Text } from './messages';
 import {
   addDays,
-  formatIsoDate,
   isExpired,
   isValidStartDate,
+  MIN_START_DATE,
   minDate,
   toDateOnly,
   toIsoDate,
@@ -44,7 +45,9 @@ export interface SyncOptions {
   detectInterest?: boolean;
   detectOwnTransfers?: boolean;
   now?: Date;
-  onProgress?: (message: string) => void;
+  onProgress?: (message: Text) => void;
+  /** Words for a transfer with no description, in the user's language. */
+  transferLabels?: TransferLabels;
 }
 
 export interface SyncOutcome {
@@ -79,24 +82,6 @@ export function syncStartDate(account: LinkedAccount): string {
   let start = account.lastSyncedDate ? addDays(account.lastSyncedDate, -OVERLAP_DAYS) : account.syncFrom;
   if (account.retryFrom && account.retryFrom < start) start = account.retryFrom;
   return start > account.syncFrom ? start : account.syncFrom;
-}
-
-function errorMessage(error: unknown): string {
-  // Host API rejections may carry a stable `code` (SDK 3.13.1); their message is
-  // localized and generic, so show the code too.
-  const code =
-    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : undefined;
-  if (error instanceof Error) return code && !error.message.includes(code) ? `${error.message} [${code}]` : error.message;
-  if (typeof error === 'string') return error;
-  const message = (error as { message?: unknown } | null)?.message;
-  if (typeof message === 'string') return code ? `${message} [${code}]` : message;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
 }
 
 const DUPLICATE_ERROR_FIELD = '_duplicate';
@@ -180,7 +165,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
 
       if (isExpired(connection, now)) {
         result.status = 'reconnect';
-        result.message = 'El consentimiento del banco ha caducado. Pulsa «Renovar» para volver a autorizarlo.';
+        result.message = msg('sync.consentExpired');
         continue;
       }
 
@@ -192,33 +177,29 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       // value matches, comment included, so an overlapping start would duplicate it.
       if (!account.lastSyncedDate && !account.syncFromConfirmed) {
         result.status = 'blocked';
-        result.message =
-          'Elige en «Bancos conectados» desde qué fecha importar esta cuenta: el día siguiente al ' +
-          'último movimiento que ya tengas en esa cuenta de Wealthfolio (por ejemplo, de un CSV).';
+        result.message = msg('sync.chooseStartDate');
         continue;
       }
       if (!account.lastSyncedDate && !isValidStartDate(account.syncFrom, today)) {
         result.status = 'blocked';
-        result.message =
-          `La fecha de inicio (${formatIsoDate(account.syncFrom)}) no es válida: tiene que ser ` +
-          'posterior al 01/01/2000 y no futura. Corrígela en «Bancos conectados».';
+        result.message = msg('sync.invalidStartDate', { startDate: account.syncFrom, minDate: MIN_START_DATE });
         continue;
       }
 
       if (dateFrom > today) {
-        result.message = 'La fecha de inicio es posterior a hoy: todavía no hay nada que importar.';
+        result.message = msg('sync.futureStart');
         continue;
       }
 
       // Once Wealthfolio refuses one request it refuses them all: don't repeat it.
       if (networkBlocked) {
         result.status = 'error';
-        result.message = 'No se ha consultado: Wealthfolio no deja salir las peticiones (ver la primera cuenta con error).';
+        result.message = msg('sync.skippedNetwork');
         continue;
       }
 
       const strategy = fetchStrategy(account, dateFrom, today);
-      onProgress?.(`Descargando movimientos de ${bank} · ${account.name} desde ${formatIsoDate(dateFrom)}…`);
+      onProgress?.(msg('sync.progressDownload', { bank, account: account.name, fromDate: dateFrom }));
       let keepWindow = false;
       try {
         const transactions = await client.getAllTransactions(account.uid, dateFrom, today, { strategy });
@@ -233,22 +214,13 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
             // for good, so leave it as it was.
             keepWindow = !account.lastSyncedDate;
             result.status = keepWindow ? 'blocked' : result.status;
-            result.message =
-              `El banco no ha devuelto ningún movimiento desde el ${formatIsoDate(dateFrom)}.` +
-              (keepWindow
-                ? ' La cuenta no se da por sincronizada. Si esperabas movimientos, el banco no guarda ' +
-                  'tanto historial o ya pasó la hora siguiente a autorizar: renueva el permiso y ' +
-                  'sincroniza enseguida, o elige una fecha más reciente. Si la cuenta no tuvo ' +
-                  'movimientos en ese tiempo, es normal.'
-                : '');
+            result.message = msg(keepWindow ? 'sync.noMovementsFirstSync' : 'sync.noMovements', {
+              fromDate: dateFrom,
+            });
           } else if (earliest > dateFrom) {
-            result.notes!.push(
-              `El banco ha dado movimientos desde el ${formatIsoDate(earliest)} (pediste desde el ` +
-                `${formatIsoDate(dateFrom)}). Si en ese intervalo hubo movimientos, el banco no guarda ` +
-                'más historial: compruébalo con el saldo.',
-            );
+            result.notes!.push(msg('sync.historyPartial', { earliestDate: earliest, fromDate: dateFrom }));
           } else {
-            result.notes!.push(`El banco ha dado todo el historial pedido, desde el ${formatIsoDate(earliest)}.`);
+            result.notes!.push(msg('sync.historyFull', { earliestDate: earliest }));
           }
         }
         const mapped = await mapTransactions(transactions, {
@@ -257,6 +229,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
           syncedIbans,
           bankName: bank,
           detectInterest: options.detectInterest ?? true,
+          transferLabels: options.transferLabels,
         });
         const pending = mapped.skipped.filter((s) => s.reason === 'pending');
         result.pending = pending.length;
@@ -266,7 +239,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         if (error instanceof NetworkBlockedError) networkBlocked = true;
         result.status =
           error instanceof EnableBankingError && error.needsReconnect ? 'reconnect' : 'error';
-        result.message = errorMessage(error);
+        result.message = errorToText(error);
         continue;
       }
 
@@ -276,7 +249,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
           const balance = pickBalance(await client.getBalances(account.uid), now.toISOString());
           if (balance) account.bankBalance = balance;
         } catch (error) {
-          result.notes!.push(`No se pudo leer el saldo del banco: ${errorMessage(error)}`);
+          result.notes!.push(msg('sync.balanceFailed', { detail: errorToText(error) }));
         }
       }
     }
@@ -293,7 +266,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   }
 
   const invalidRows: InvalidRowInfo[] = [];
-  const recordInvalid = (entry: AccountWork, original: ActivityImport, errors: string[]) => {
+  const recordInvalid = (entry: AccountWork, original: ActivityImport, errors: Text[]) => {
     entry.result.invalid += 1;
     const date = String(original.date ?? '').slice(0, 10);
     if (date) entry.holdDates.push(date);
@@ -302,23 +275,23 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       date,
       amount: `${original.activityType} ${original.amount ?? ''} ${original.currency ?? ''}`.trim(),
       comment: original.comment ?? '',
-      errors: errors.length > 0 ? errors : ['Fila no válida'],
+      errors: errors.length > 0 ? errors : [msg('sync.invalidRow')],
     });
   };
 
-  let importError: string | undefined;
+  let importError: Text | undefined;
   let importSucceeded = true;
   let validationFailed = false;
   let ownTransfers = 0;
 
   if (allRows.length > 0) {
-    onProgress?.(`Validando ${allRows.length} movimiento(s) con Wealthfolio…`);
+    onProgress?.(msg('sync.progressValidate', { n: allRows.length }));
     // A rejected call (not a rejected row) must not abort the sync: report it, keep
     // the balances read so far and leave every window where it was.
     const checked = await host.activities.checkImport(allRows).catch((error: unknown) => {
       validationFailed = true;
       importSucceeded = false;
-      importError = `Wealthfolio no pudo validar los movimientos: ${errorMessage(error)}`;
+      importError = msg('sync.validateFailed', { detail: errorToText(error) });
       return [] as ActivityImport[];
     });
     const fresh: FreshRow[] = [];
@@ -365,7 +338,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
 
     // 3. Import the new rows.
     if (fresh.length > 0) {
-      onProgress?.(`Importando ${fresh.length} movimiento(s) nuevo(s)…`);
+      onProgress?.(msg('sync.progressImport', { n: fresh.length }));
       try {
         const result = await host.activities.import(fresh.map((f) => f.row));
         if (result.summary.success) {
@@ -384,13 +357,13 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         } else {
           importSucceeded = false;
           const firstErrors = (result.activities ?? []).flatMap(rowErrors).slice(0, 3);
-          importError =
-            'Wealthfolio rechazó la importación' +
-            (firstErrors.length ? `: ${firstErrors.join('; ')}` : '.');
+          importError = firstErrors.length
+            ? msg('sync.importRejectedDetail', { detail: firstErrors.join('; ') })
+            : msg('sync.importRejected');
         }
       } catch (error) {
         importSucceeded = false;
-        importError = `Error al importar: ${errorMessage(error)}`;
+        importError = msg('sync.importFailed', { detail: errorToText(error) });
       }
     }
   }
@@ -414,26 +387,19 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       delete account.retryFrom;
     } else if (hold < oldestRetry) {
       account.retryFrom = oldestRetry;
-      result.notes!.push(
-        `Hay movimientos pendientes o rechazados del ${formatIsoDate(hold)} que ya no se volverán a ` +
-          `consultar (más de ${MAX_RETRY_DAYS} días). Revísalos a mano.`,
-      );
+      result.notes!.push(msg('sync.heldTooOld', { holdDate: hold, days: MAX_RETRY_DAYS }));
     } else {
       account.retryFrom = hold;
     }
 
     if (result.pending) {
-      result.notes!.push(
-        `${result.pending} movimiento(s) pendiente(s): se importarán cuando el banco los contabilice.`,
-      );
+      result.notes!.push(msg('sync.pendingNote', { n: result.pending }));
     }
     if (result.invalid > 0) {
-      result.notes!.push(
-        `${result.invalid} movimiento(s) rechazado(s) por Wealthfolio: se volverán a intentar en la próxima sincronización.`,
-      );
+      result.notes!.push(msg('sync.rejectedNote', { n: result.invalid }));
     }
     if (result.ownTransfers) {
-      result.notes!.push(`${result.ownTransfers} movimiento(s) registrado(s) como traspaso entre tus cuentas.`);
+      result.notes!.push(msg('sync.ownTransfersNote', { n: result.ownTransfers }));
     }
   }
 

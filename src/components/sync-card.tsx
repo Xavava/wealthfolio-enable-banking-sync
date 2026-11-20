@@ -13,30 +13,39 @@ import {
 } from '@wealthfolio/ui';
 import { LoaderCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { useText } from '../i18n';
+import type { Text } from '../lib/messages';
 import { store, type SyncReport, type SyncStatus } from '../lib/state';
 import { runSync } from '../lib/sync';
 import { QK, useAddonCtx, useSaveConnections, type AddonState } from '../hooks/use-addon-data';
-import { errorText, formatDate, formatDateTime } from './ui-bits';
 
 function StatusBadge({ status }: { status: SyncStatus }) {
-  if (status === 'ok') return <Badge variant="success-subtle">OK</Badge>;
-  if (status === 'reconnect') return <Badge variant="warning-subtle">Renovar</Badge>;
-  if (status === 'blocked') return <Badge variant="warning-subtle">Revisar fecha</Badge>;
-  return <Badge variant="destructive-subtle">Error</Badge>;
+  const { t } = useText();
+  if (status === 'ok') return <Badge variant="success-subtle">{t('syncCard.statusOk')}</Badge>;
+  if (status === 'reconnect') return <Badge variant="warning-subtle">{t('syncCard.statusReconnect')}</Badge>;
+  if (status === 'blocked') return <Badge variant="warning-subtle">{t('syncCard.statusBlocked')}</Badge>;
+  return <Badge variant="destructive-subtle">{t('syncCard.statusError')}</Badge>;
 }
 
 function ReportView({ report }: { report: SyncReport }) {
+  const { t, rich, render, formatDay, formatWhen } = useText();
   return (
     <div className="space-y-3">
       <div className="text-muted-foreground text-sm">
-        Última sincronización: {formatDateTime(report.finishedAt)} · <b>{report.imported}</b> nuevo(s) ·{' '}
-        {report.duplicates} ya importado(s)
-        {(report.ownTransfers ?? 0) > 0 && <> · {report.ownTransfers} traspaso(s) entre tus cuentas</>}
-        {report.invalid > 0 && <> · <span className="text-destructive">{report.invalid} con errores</span></>}
+        {t('syncCard.lastSync', { when: formatWhen(report.finishedAt) })} ·{' '}
+        {rich('syncCard.newCount', { n: <b>{report.imported}</b> })} ·{' '}
+        {t('syncCard.duplicateCount', { n: report.duplicates })}
+        {(report.ownTransfers ?? 0) > 0 && <> · {t('syncCard.transferCount', { n: report.ownTransfers })}</>}
+        {report.invalid > 0 && (
+          <>
+            {' '}
+            · <span className="text-destructive">{t('syncCard.errorCount', { n: report.invalid })}</span>
+          </>
+        )}
       </div>
       {report.importError && (
         <Alert variant="destructive">
-          <AlertDescription>{report.importError}</AlertDescription>
+          <AlertDescription>{render(report.importError)}</AlertDescription>
         </Alert>
       )}
       {report.accounts.length > 0 && (
@@ -44,12 +53,12 @@ function ReportView({ report }: { report: SyncReport }) {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground text-xs">
               <tr>
-                <th className="px-3 py-2 text-start font-medium whitespace-nowrap">Cuenta</th>
-                <th className="px-3 py-2 text-start font-medium whitespace-nowrap">Desde</th>
-                <th className="px-3 py-2 text-end font-medium whitespace-nowrap">Descargados</th>
-                <th className="px-3 py-2 text-end font-medium whitespace-nowrap">Nuevos</th>
-                <th className="px-3 py-2 text-end font-medium whitespace-nowrap">Ya estaban</th>
-                <th className="px-3 py-2 text-start font-medium whitespace-nowrap">Estado</th>
+                <th className="px-3 py-2 text-start font-medium whitespace-nowrap">{t('syncCard.columnAccount')}</th>
+                <th className="px-3 py-2 text-start font-medium whitespace-nowrap">{t('syncCard.columnFrom')}</th>
+                <th className="px-3 py-2 text-end font-medium whitespace-nowrap">{t('syncCard.columnFetched')}</th>
+                <th className="px-3 py-2 text-end font-medium whitespace-nowrap">{t('syncCard.columnNew')}</th>
+                <th className="px-3 py-2 text-end font-medium whitespace-nowrap">{t('syncCard.columnExisting')}</th>
+                <th className="px-3 py-2 text-start font-medium whitespace-nowrap">{t('syncCard.columnStatus')}</th>
               </tr>
             </thead>
             <tbody>
@@ -62,16 +71,16 @@ function ReportView({ report }: { report: SyncReport }) {
                       <div
                         className={`mt-1 max-w-md text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
                       >
-                        {row.message}
+                        {render(row.message)}
                       </div>
                     )}
-                    {row.notes?.map((note, i) => (
+                    {row.notes?.map((note: Text, i) => (
                       <div key={i} className="text-muted-foreground mt-1 max-w-md text-xs">
-                        {note}
+                        {render(note)}
                       </div>
                     ))}
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatDate(row.dateFrom)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDay(row.dateFrom)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{row.fetched}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{row.imported}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{row.duplicates}</td>
@@ -87,16 +96,16 @@ function ReportView({ report }: { report: SyncReport }) {
       {report.invalidRows.length > 0 && (
         <details className="rounded-md border p-3 text-sm">
           <summary className="cursor-pointer font-medium">
-            {report.invalidRows.length} movimiento(s) que Wealthfolio no aceptó
+            {t('syncCard.invalidSummary', { n: report.invalidRows.length })}
           </summary>
           <ul className="mt-2 space-y-2">
             {report.invalidRows.slice(0, 50).map((row, index) => (
               <li key={index} className="text-xs">
                 <div>
-                  {formatDate(row.date)} · {row.amount} · {row.account}
+                  {formatDay(row.date)} · {row.amount} · {row.account}
                 </div>
                 {row.comment && <div className="text-muted-foreground">{row.comment}</div>}
-                <div className="text-destructive">{row.errors.join('; ')}</div>
+                <div className="text-destructive">{row.errors.map((error) => render(error)).join('; ')}</div>
               </li>
             ))}
           </ul>
@@ -108,10 +117,11 @@ function ReportView({ report }: { report: SyncReport }) {
 
 export function SyncCard({ state }: { state: AddonState }) {
   const ctx = useAddonCtx();
+  const { t, render, errorText } = useText();
   const queryClient = useQueryClient();
   const saveConnections = useSaveConnections();
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState('');
+  const [progress, setProgress] = useState<Text>('');
   const [error, setError] = useState<string | null>(null);
 
   const mapped = state.connections.flatMap((c) => c.accounts).filter((a) => a.wealthfolioAccountId);
@@ -122,7 +132,7 @@ export function SyncCard({ state }: { state: AddonState }) {
     if (running) return;
     setRunning(true);
     setError(null);
-    setProgress('Preparando…');
+    setProgress(t('syncCard.preparing'));
     try {
       const { report, connections } = await runSync({
         host: ctx.api,
@@ -131,6 +141,7 @@ export function SyncCard({ state }: { state: AddonState }) {
         detectInterest,
         detectOwnTransfers,
         onProgress: setProgress,
+        transferLabels: { from: t('sync.transferFrom'), to: t('sync.transferTo') },
       });
       await saveConnections(connections);
       await store.saveLastReport(ctx.api.storage, report);
@@ -143,12 +154,12 @@ export function SyncCard({ state }: { state: AddonState }) {
       }
       const failures = report.accounts.filter((a) => a.status !== 'ok').length;
       if (failures > 0 || report.importError) {
-        ctx.api.toast.error(`Sincronización con incidencias: ${report.imported} movimiento(s) nuevo(s)`);
+        ctx.api.toast.error(t('syncCard.toastIssues', { n: report.imported }));
       } else {
         ctx.api.toast.success(
           report.imported > 0
-            ? `${report.imported} movimiento(s) nuevo(s) importado(s)`
-            : 'Todo al día: no hay movimientos nuevos',
+            ? t('syncCard.toastImported', { n: report.imported })
+            : t('syncCard.toastUpToDate'),
         );
       }
     } catch (e) {
@@ -169,28 +180,25 @@ export function SyncCard({ state }: { state: AddonState }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center justify-between gap-3 text-base">
-          <span>Sincronización</span>
+          <span>{t('syncCard.title')}</span>
           <Button size="lg" onClick={sync} disabled={running || mapped.length === 0}>
             {running ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-            {running ? 'Sincronizando…' : 'Sincronizar ahora'}
+            {running ? t('syncCard.syncing') : t('syncCard.syncNow')}
           </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {mapped.length === 0 && (
-          <p className="text-muted-foreground text-sm">
-            Conecta un banco y asigna al menos una de sus cuentas a una cuenta de Wealthfolio para
-            poder sincronizar.
-          </p>
+          <p className="text-muted-foreground text-sm">{t('syncCard.noMapped')}</p>
         )}
         {running && progress && (
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <LoaderCircle className="size-4 animate-spin" /> {progress}
+            <LoaderCircle className="size-4 animate-spin" /> {render(progress)}
           </div>
         )}
         {error && (
           <Alert variant="destructive">
-            <AlertTitle>No se pudo sincronizar</AlertTitle>
+            <AlertTitle>{t('syncCard.failedTitle')}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -202,7 +210,7 @@ export function SyncCard({ state }: { state: AddonState }) {
               checked={detectInterest}
               onChange={(e) => saveOption({ detectInterest: e.target.checked })}
             />
-            Registrar como «Intereses» los ingresos cuyo concepto contenga «intereses»
+            {t('syncCard.optionInterest')}
           </label>
           <label className="text-muted-foreground flex items-start gap-2 text-xs">
             <input
@@ -211,11 +219,7 @@ export function SyncCard({ state }: { state: AddonState }) {
               checked={detectOwnTransfers}
               onChange={(e) => saveOption({ detectOwnTransfers: e.target.checked })}
             />
-            <span>
-              Registrar como traspaso un cargo y un abono del mismo importe entre dos de tus cuentas
-              sincronizadas (hasta 3 días de diferencia) cuando una es de tarjeta o el concepto dice
-              «traspaso», «recarga» o «pago tarjeta»
-            </span>
+            <span>{t('syncCard.optionTransfers')}</span>
           </label>
         </div>
       </CardContent>

@@ -1,6 +1,7 @@
 import { Button, Input } from '@wealthfolio/ui';
 import { Check, Copy } from 'lucide-react';
 import { useState, type SelectHTMLAttributes } from 'react';
+import { useText } from '../i18n';
 
 /**
  * Native <select> styled like Wealthfolio inputs. Used instead of the Base UI
@@ -40,6 +41,7 @@ async function copyText(text: string): Promise<boolean> {
 
 /** Read-only field with a copy button; selects the text when copying is blocked. */
 export function CopyField({ value }: { value: string }) {
+  const { t } = useText();
   const [status, setStatus] = useState<'idle' | 'copied' | 'manual'>('idle');
   return (
     <div className="space-y-1">
@@ -60,13 +62,11 @@ export function CopyField({ value }: { value: string }) {
           }}
         >
           {status === 'copied' ? <Check className="size-4" /> : <Copy className="size-4" />}
-          {status === 'copied' ? 'Copiado' : 'Copiar'}
+          {status === 'copied' ? t('common.copied') : t('common.copy')}
         </Button>
       </div>
       {status === 'manual' && (
-        <p className="text-muted-foreground text-xs">
-          No se pudo copiar automáticamente: haz clic en el campo y pulsa Ctrl+C (⌘+C en Mac).
-        </p>
+        <p className="text-muted-foreground text-xs">{t('common.copyManual')}</p>
       )}
     </div>
   );
@@ -92,36 +92,4 @@ export function Field({
       {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
     </div>
   );
-}
-
-export function formatDateTime(iso?: string): string {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-export function formatDate(iso?: string): string {
-  if (!iso) return '—';
-  const date = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString('es-ES', { dateStyle: 'medium' });
-}
-
-export function formatMoney(value: number, currency: string, signed = false): string {
-  if (!Number.isFinite(value)) return '—';
-  try {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency,
-      signDisplay: signed ? 'exceptZero' : 'auto',
-    }).format(value);
-  } catch {
-    return `${signed && value > 0 ? '+' : ''}${value.toFixed(2)} ${currency}`;
-  }
-}
-
-export function errorText(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return typeof error === 'string' ? error : 'Error desconocido';
 }

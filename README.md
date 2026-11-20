@@ -1,212 +1,248 @@
-# Enable Banking Sync para Wealthfolio
+# Enable Banking Sync for Wealthfolio
 
-Add-on de [Wealthfolio](https://wealthfolio.app) que importa **con un botón** los movimientos de
-tus cuentas bancarias (Santander, BBVA, CaixaBank, ING, Sabadell, Bankinter, Openbank… y más de
-2.000 bancos europeos) a través de [Enable Banking](https://enablebanking.com), un agregador
-bancario regulado (PSD2).
+**English** · [Español](README.es.md)
 
-- Acceso de **solo lectura**: autorizas el acceso en la web de tu banco; el add-on nunca ve tus
-  claves del banco.
-- **Sin duplicados**: cada movimiento lleva un identificador estable (`sourceRecordId`) y
-  Wealthfolio salta los que ya importaste. Puedes pulsar el botón todas las veces que quieras.
-- **No pierde movimientos**: los pendientes y los que Wealthfolio rechaza se vuelven a consultar
-  en cada sincronización hasta que entran.
-- **Sin solapes con tus CSV**: en la primera sincronización de cada cuenta eliges tú desde qué
-  fecha importar, y la comprobación de saldo avisa si algo no cuadra. El add-on no lee los
-  movimientos que ya tienes en Wealthfolio.
-- **Transferencias internas**: el dinero que mueves entre dos cuentas tuyas sincronizadas se
-  registra como transferencia (`TRANSFER_OUT` / `TRANSFER_IN`), no como gasto e ingreso.
-- **Comprobación de saldo**: compara el saldo que da el banco con el de Wealthfolio.
-- Tus datos solo viajan entre tu equipo y `api.enablebanking.com`.
+A [Wealthfolio](https://wealthfolio.app) add-on that imports the transactions of your bank
+accounts **with one click** (Santander, BBVA, CaixaBank, ING, Sabadell, Bankinter, Openbank… and
+more than 2,000 European banks) through [Enable Banking](https://enablebanking.com), a regulated
+bank aggregator (PSD2).
 
-Requiere **Wealthfolio 3.13.1 o superior** (en Windows, las versiones anteriores admiten unos 1.280 caracteres por
-secreto y no pueden guardar la clave privada, que ocupa más).
+- **Read-only** access: you authorize access on your bank's website; the add-on never sees your
+  bank credentials.
+- **No duplicates**: every transaction carries a stable identifier (`sourceRecordId`) and
+  Wealthfolio skips the ones already imported. Press the button as often as you like.
+- **No lost transactions**: pending transactions and those Wealthfolio rejects are checked again
+  on every sync until they get in.
+- **No overlap with your CSV imports**: on the first sync of each account you choose the date to
+  import from, and the balance check warns you if something does not match. The add-on does not
+  read the transactions you already have in Wealthfolio.
+- **Internal transfers**: money you move between two of your synced accounts is recorded as a
+  transfer (`TRANSFER_OUT` / `TRANSFER_IN`), not as spending and income.
+- **Balance check**: compares the balance the bank reports with Wealthfolio's.
+- Your data only travels between your computer and `api.enablebanking.com`.
 
-## 1. Crea tu aplicación en Enable Banking (una sola vez)
+Requires **Wealthfolio 3.13.1 or later** (on Windows, earlier versions allow about 1,280
+characters per secret and cannot store the private key, which is longer).
 
-Enable Banking es gratuito para uso personal con tus propias cuentas (modo «restringido»).
+Tested with **BBVA** and **Banco de Sabadell** (Spain).
 
-1. Crea una cuenta en [enablebanking.com](https://enablebanking.com) y entra en el panel de
-   control → **Applications** → **Register new application**.
-2. Elige el entorno **Production**, ponle un nombre y añade una **URL de redirección**, por
-   ejemplo `https://localhost/callback`. No tiene que existir ningún servidor ahí: solo
-   copiarás la dirección a la que te devuelve el banco.
-3. Genera la clave en el navegador. Se descargará un archivo `xxxxxxxx-xxxx-….pem`: el nombre
-   del archivo es el **ID de la aplicación** y su contenido es la **clave privada**. Guárdalo
-   bien.
-4. En la aplicación recién creada pulsa **Link accounts** y autoriza tus cuentas en cada banco.
-   Así la aplicación pasa a «Active (restricted)»: solo podrá leer las cuentas que vincules.
+**Language**: the interface follows Wealthfolio's language. It is available in English and
+Spanish; any other language shows English.
 
-## 2. Instala el add-on
+## 1. Create your Enable Banking application (once)
 
-En Wealthfolio, ve a **Ajustes → Complementos**, elige instalar desde archivo y selecciona
-`wealthfolio-enable-banking-sync-addon-1.3.0.zip`.
+Enable Banking is free for personal use with your own accounts ("restricted" mode). Everyone
+must create **their own** application: its terms do not allow giving access to others.
 
-> **Importante:** en la ventana de permisos, en **Hosts de red**, marca
-> `api.enablebanking.com` antes de pulsar **Aprobar e instalar**. La casilla viene
-> desmarcada, también al **actualizar** el add-on, y sin ella el add-on no tiene acceso a
-> internet.
+1. Create an account at [enablebanking.com](https://enablebanking.com) and open the control
+   panel → **Applications** → **Register new application**.
+2. Choose the **Production** environment, give it a name and add a **redirect URL**, for example
+   `https://localhost/callback`. No server needs to exist there: you will only copy the address
+   the bank sends you back to.
+3. Generate the key in the browser. A file `xxxxxxxx-xxxx-….pem` is downloaded: the file name is
+   the **application ID** and its content is the **private key**. Keep it safe and **never share
+   it**.
+4. In the new application, press **Link accounts** and authorize, at each bank, **every account**
+   you want to sync. The application becomes "Active (restricted)": it can only read the accounts
+   you link. If you later add another bank or account, link it here too before connecting it in
+   the add-on; otherwise the bank will not share any account.
 
-Los permisos que pide:
+## 2. Install the add-on
 
-| Permiso | Para qué |
+Download `wealthfolio-enable-banking-sync-addon-1.4.0.zip` from the *Releases* page. In
+Wealthfolio, go to **Settings → Add-ons**, press **Install from file** and select the zip.
+
+> **Important:** in the permissions dialog, under **Network hosts**, tick
+> `api.enablebanking.com` before pressing **Approve & install**. The box comes unticked, also
+> when you **update** the add-on, and without it the add-on has no internet access.
+
+The permissions it asks for:
+
+| Permission | What for |
 | --- | --- |
-| Cuentas (`getAll`) | Listar tus cuentas de Wealthfolio para asociarlas con las del banco |
-| Actividades (`checkImport`, `import`) | Validar e importar los movimientos (no puede leer, editar ni borrar los que ya tienes) |
-| Cartera (`getLatestValuations`) | Leer el saldo de cada cuenta en Wealthfolio para compararlo con el del banco |
-| Secretos | Guardar cifrada la clave privada y el token temporal de acceso |
-| Red (`api.enablebanking.com`) | Hablar con Enable Banking |
-| Eventos (`onUpdateComplete`) | Refrescar la comparación de saldos cuando Wealthfolio termina de recalcular |
+| Accounts (`getAll`) | List your Wealthfolio accounts to pair them with the bank's |
+| Activities (`checkImport`, `import`) | Validate and import transactions (it cannot read, edit or delete the ones you already have) |
+| Portfolio (`getLatestValuations`) | Read each account's balance in Wealthfolio to compare it with the bank's |
+| Secrets | Store the private key and the short-lived access token encrypted |
+| Network (`api.enablebanking.com`) | Talk to Enable Banking |
+| Events (`onUpdateComplete`) | Refresh the balance comparison when Wealthfolio finishes recalculating |
 
-Aparecerá **Sincronizar bancos** en la barra lateral.
+**Bank sync** appears in the sidebar.
 
-Si instalaste o actualizaste sin marcar la casilla, el add-on avisará de que «Wealthfolio no ha
-dejado salir la petición». Para arreglarlo: **Ajustes → Complementos**, pasa el ratón por
-*Enable Banking Sync*, pulsa el icono del **ojo** («Ver permisos»), marca
-`api.enablebanking.com` en **Hosts de red** y pulsa **Guardar**.
+If you installed or updated without ticking the box, the add-on says that "Wealthfolio did not
+let the request out". To fix it: **Settings → Add-ons**, hover over *Enable Banking Sync*, click
+the **eye** icon ("View permissions"), tick `api.enablebanking.com` under **Network hosts** and
+click **Save**.
 
-## 3. Configura y conecta tus bancos
+## 3. Set up and connect your banks
 
-1. **Aplicación de Enable Banking**: pega el ID de la aplicación y carga el `.pem`. Pulsa
-   *Guardar y comprobar*. La clave se guarda en el almacén de credenciales del sistema.
-2. **Conectar un banco**: elige país y banco y pulsa *Generar enlace de autorización*.
-   - Copia el enlace y ábrelo en tu navegador (los add-ons no pueden abrir el navegador).
-   - Autoriza en tu banco. Te llevará a `https://localhost/callback?…&code=…`, una página que
-     no carga. Es normal.
-   - Copia esa URL completa de la barra de direcciones, pégala en el add-on y pulsa
-     *Completar conexión*.
-3. **Bancos conectados**: elige en qué cuenta de Wealthfolio entra cada cuenta bancaria.
-   Conviene crear antes en Wealthfolio una cuenta de tipo *Efectivo* (o *Tarjeta de crédito*)
-   por cada cuenta del banco. Elige también desde qué fecha importar la primera vez: no hay
-   fecha por defecto y, hasta que la elijas, esa cuenta no se sincroniza (ver más abajo).
-4. Pulsa **Sincronizar ahora**. Verás cuántos movimientos se descargaron, cuántos eran nuevos
-   y cuántos ya estaban.
+1. **Enable Banking application**: paste the application ID and load the `.pem`. Press *Save and
+   check*. The key is stored in the system's credential store.
+2. **Connect a bank**: choose country and bank and press *Generate authorization link*.
+   - Copy the link and open it in your browser (add-ons cannot open the browser).
+   - Authorize at your bank. It takes you to `https://localhost/callback?…&code=…`, a page that
+     does not load. This is normal.
+   - Copy that full URL from the address bar, paste it in the add-on and press *Complete
+     connection*.
+3. **Connected banks**: choose which Wealthfolio account each bank account goes into. Create a
+   *Cash* (or *Credit Card*) account in Wealthfolio for each bank account first. Also choose the
+   date to import from the first time: there is no default and, until you choose it, that
+   account is not synced (see below).
+4. Press **Sync now**. You will see how many transactions were downloaded, how many were new and
+   how many were already there.
 
-Cuando caduque el consentimiento (normalmente entre 90 y 180 días, según el banco), pulsa
-**Renovar** en ese banco y repite la autorización. Se conservan las asociaciones de cuentas y el
-historial.
+When the consent expires (usually after 90 to 180 days, depending on the bank), press **Renew**
+on that bank and authorize again. Account pairings and history are kept.
 
-## Cómo se convierten los movimientos
+## How transactions are converted
 
-| Movimiento del banco | Actividad en Wealthfolio |
+| Bank transaction | Wealthfolio activity |
 | --- | --- |
-| Cargo (`DBIT`) | `WITHDRAWAL` |
-| Abono (`CRDT`) | `DEPOSIT` |
-| Abono cuyo concepto contiene «intereses» (desactivable) | `INTEREST` |
-| Cargo/abono hacia otra cuenta tuya sincronizada (mismo IBAN) | `TRANSFER_OUT` / `TRANSFER_IN` (internas) |
-| Cargo en una cuenta y abono del mismo importe en otra tuya, sin IBAN (desactivable) | `TRANSFER_OUT` / `TRANSFER_IN` (internas), ver abajo |
-| Movimiento pendiente (`PDNG`) | No se importa hasta que el banco lo contabilice |
+| Debit (`DBIT`) | `WITHDRAWAL` |
+| Credit (`CRDT`) | `DEPOSIT` |
+| Credit whose description contains "interest" or "intereses" (optional) | `INTEREST` |
+| Debit/credit to another of your synced accounts (same IBAN) | `TRANSFER_OUT` / `TRANSFER_IN` (internal) |
+| Debit in one account and a credit of the same amount in another of yours, without IBAN (optional) | `TRANSFER_OUT` / `TRANSFER_IN` (internal), see below |
+| Pending transaction (`PDNG`) | Not imported until the bank books it |
 
-El comentario de cada actividad lleva la contraparte y el concepto (`MERCADONA · COMPRA TARJ.
-1234`). Los detalles del banco (referencia, fechas de contabilización y valor, código de
-operación) se guardan en los metadatos de la actividad.
+Each activity's comment carries the counterparty and the description (`MERCADONA · COMPRA TARJ.
+1234`). The bank's details (reference, booking and value dates, transaction code) are kept in the
+activity's metadata.
 
-En cada sincronización se vuelven a leer los 7 días anteriores a la última, para recoger
-movimientos que el banco contabiliza tarde. Los ya importados se saltan solos.
+Every sync reads again the 7 days before the last one, to pick up transactions the bank books
+late. Those already imported are skipped automatically.
 
-Si quedó algún movimiento **pendiente** o **rechazado por Wealthfolio**, la siguiente
-sincronización empieza en su fecha, aunque sea más antigua, hasta que entre. Pasados 89 días
-se deja de intentar (los bancos no suelen dar más historial) y se avisa en el informe.
+If a transaction was left **pending** or **rejected by Wealthfolio**, the next sync starts at its
+date, even if older, until it gets in. After 89 days it is no longer retried (banks rarely give
+more history) and the report warns about it.
 
-### Traspasos sin IBAN
+### Transfers without IBAN
 
-Los pagos de la tarjeta de crédito, las recargas de una tarjeta prepago o los traspasos entre
-cuentas no siempre llevan el IBAN de la otra cuenta. Se registran como traspaso interno cuando,
-en la misma sincronización, hay un cargo en una cuenta y un abono **del mismo importe y
-divisa** en otra cuenta tuya sincronizada, con **3 días como mucho** entre ambos, y además:
+Credit card repayments, prepaid card top-ups and transfers between accounts do not always carry
+the other account's IBAN. They are recorded as an internal transfer when, in the same sync,
+there is a debit in one account and a credit **of the same amount and currency** in another of
+your synced accounts, **at most 3 days** apart, and also:
 
-- una de las dos cuentas es de tipo *Tarjeta de crédito* en Wealthfolio, o
-- el concepto dice «traspaso», «recarga», «liquidación tarjeta», «pago tarjeta»…
+- one of the two accounts is a *Credit Card* account in Wealthfolio, or
+- the description says "traspaso", "recarga", "liquidación tarjeta", "pago tarjeta"… (Spanish
+  bank wording).
 
-Una «transferencia» normal no cuenta, porque igual puede ser un pago a otra persona. Si un
-movimiento podría emparejarse con más de uno, no se toca. Wealthfolio enlaza solo las dos
-partes cuando tienen la misma fecha; si no, aparecen en el Centro de salud para enlazarlas con
-un clic. Se desactiva con la casilla de la tarjeta *Sincronización*.
+A plain "transfer" does not count, because it may as well be a payment to someone else. If a
+transaction could be paired with more than one, it is left alone. Wealthfolio links both sides by
+itself when they have the same date; otherwise they show up in the Health Center to be linked
+with one click. Turn it off with the checkbox in the *Sync* card.
 
-## Si ya importaste movimientos por CSV
+## If you already imported transactions from a CSV
 
-Wealthfolio solo reconoce que un movimiento del banco ya está si coinciden **todos** sus datos,
-comentario incluido, y los comentarios de un CSV casi nunca coinciden con los del banco. Por eso,
-en la primera sincronización de cada cuenta:
+Wealthfolio only recognizes that a bank transaction is already there if **all** its data match,
+comment included, and CSV comments almost never match the bank's. So, on the first sync of each
+account:
 
-- Mira en Wealthfolio la fecha del último movimiento de esa cuenta y pon como *Importar desde*
-  el **día siguiente**. Si la cuenta está vacía, la fecha desde la que quieras historial.
-- Mientras no elijas la fecha, esa cuenta no se sincroniza (estado *Revisar fecha*).
-- Si te equivocas y se duplica algo, el saldo de Wealthfolio no cuadrará con el del banco y lo
-  verás en *Bancos conectados*.
+- Look up in Wealthfolio the date of the last transaction in that account and set *Import from*
+  to the **next day**. If the account is empty, the date you want history from.
+- Until you choose the date, that account is not synced (status *Check date*).
+- If you get it wrong and something is duplicated, the Wealthfolio balance will not match the
+  bank's and you will see it in *Connected banks*.
+- Conversely, a transaction the bank booked on the last day of the CSV after you downloaded it
+  will be in neither: the balance reveals that too.
 
-El add-on no consulta tus movimientos para averiguarlo él: así no necesita permiso para leer
-el historial de tus cuentas. Esto solo afecta a la primera sincronización (o a cambiar la cuenta
-de destino). Después, cada movimiento se reconoce por su identificador (`sourceRecordId`), también
-si reinstalas el add-on.
+The add-on does not read your transactions to work this out itself: that way it needs no
+permission to read your accounts' history. This only affects the first sync (or changing the
+target account). Afterwards, every transaction is recognized by its identifier
+(`sourceRecordId`), also if you reinstall the add-on.
 
-Si sigues importando por CSV alguna cuenta que el banco no comparte (por ejemplo, una tarjeta
-prepago), hazlo en una cuenta de Wealthfolio distinta de las que sincroniza el add-on.
+If you keep importing from CSV an account the bank does not share (for example, a prepaid card),
+do it in a Wealthfolio account other than those the add-on syncs.
 
-## Comprobación de saldo
+## Balance check
 
-En cada sincronización se lee el saldo de cada cuenta (como mucho una vez al día, por el
-límite de consultas PSD2), prefiriendo el saldo contabilizado. En *Bancos conectados* verás el
-saldo del banco junto al de Wealthfolio y si **cuadran**. Un descuadre suele indicar historial
-anterior a la fecha de inicio que falta, movimientos pendientes o rechazados, o que Wealthfolio
-aún no ha terminado de recalcular. En tarjetas de crédito el banco puede dar la deuda en
-positivo; se indica como «cuadra con el signo contrario».
+Every sync reads each account's balance (at most once a day, because of the PSD2 request limit),
+preferring the booked balance. *Connected banks* shows the bank's balance next to Wealthfolio's
+and whether they **match**. A difference usually means missing history before the start date,
+pending or rejected transactions, or that Wealthfolio has not finished recalculating. For credit
+cards the bank may report the debt as positive; this shows as "matches (the bank shows it with
+the opposite sign)".
 
-## Cuánto historial da el banco
+The balance compared is the **booked** one, not the *available* balance your bank's app shows:
+the difference between them is holds (card payments not settled yet).
 
-Enable Banking no publica cuánto historial da cada banco (se puede consultar en su panel, en
-*Data Insights*). Lo habitual es que el banco dé historial largo solo durante **más o menos la
-hora siguiente a autorizar** y, después, solo los **últimos 90 días**.
+## How much history the bank gives
 
-Si se le pide un rango que no guarda, BBVA no da error: devuelve una lista **vacía**. Por eso:
+Enable Banking does not publish how much history each bank gives (you can check it in its control
+panel, under *Data Insights*). Usually the bank gives long history only for **about an hour after
+you authorize** and, afterwards, only the **last 90 days**. For example, BBVA gave almost three
+years right after authorizing.
 
-- La primera sincronización de cada cuenta, y cualquiera que empiece hace más de 90 días, pide a
-  Enable Banking el historial **más largo** que conserve el banco a partir de tu fecha de inicio
-  (`strategy=longest`). Así entra lo que haya en lugar de nada.
-- El informe y *Bancos conectados* dicen desde qué fecha dio movimientos el banco y desde cuándo
-  los pediste.
-- Si el banco no devuelve ningún movimiento, la cuenta **no** se da por sincronizada (estado
-  *Revisar fecha*): la siguiente sincronización vuelve a intentarlo desde la misma fecha.
-- Para traer más de 90 días: conecta o renueva el banco y sincroniza **enseguida**.
+When asked for a range it does not keep, BBVA does not return an error: it returns an **empty**
+list. So:
 
-Las sincronizaciones siguientes piden el rango exacto (los últimos días), que no gasta llamadas
-de más al banco.
+- The first sync of each account, and any sync that starts more than 90 days ago, asks Enable
+  Banking for the **longest** history the bank keeps from your start date (`strategy=longest`).
+  That way whatever exists gets in, instead of nothing.
+- The report and *Connected banks* say from which date the bank gave transactions and from when
+  you asked.
+- If the bank returns no transactions at all, the account is **not** marked as synced (status
+  *Check date*): the next sync tries again from the same date.
+- To get more than 90 days: connect or renew the bank and sync **right away**.
 
-## Limitaciones
+Later syncs ask for the exact range (the last few days), which does not use extra calls to the
+bank.
 
-- **Consultas al día**: por PSD2, algunos bancos limitan las consultas sin el usuario delante a
-  unas 4 al día por cuenta. Si ves un error de límite, espera unas horas.
-- **Histórico**: muchos bancos solo dan 90 días de movimientos, salvo justo después de
-  autorizar (ver *Cuánto historial da el banco*).
-- No importa categorías: usa las reglas de categorización de gastos de Wealthfolio.
-- El saldo solo se compara, no se importa ni se corrige.
-- No todos los bancos dan acceso a las tarjetas (de crédito o prepago) por PSD2; lo sabrás al
-  conectar el banco.
-- Es necesario copiar y pegar la URL de vuelta del banco, porque los add-ons se ejecutan en un
-  sandbox sin acceso al navegador.
+## Limitations
 
-## Desarrollo
+- **Requests per day**: under PSD2, some banks limit requests made without the user present to
+  about 4 a day per account. If you see a rate-limit error, wait a few hours.
+- **History**: many banks only give 90 days of transactions, except right after authorizing (see
+  *How much history the bank gives*).
+- Categories are not imported: use Wealthfolio's spending categorization rules.
+- The balance is only compared, never imported or corrected.
+- Not every bank gives access to cards (credit or prepaid) through PSD2; you will find out when
+  you connect the bank.
+- You have to copy and paste the URL the bank sends you back to, because add-ons run in a sandbox
+  without access to the browser.
 
-Necesitas Node.js 24 y pnpm 10 (`corepack enable`).
+## Security
+
+- Your private key (`.pem`) and application ID are yours: do not publish them, send them to
+  anyone or paste them in issues. Whoever has the key can read the linked accounts while the
+  consent lasts.
+- If you report a bug, remove IBANs, names and transactions from logs and screenshots.
+
+## Development
+
+You need Node.js 24 and pnpm 10 (`corepack enable`).
 
 ```bash
 pnpm install
-pnpm test          # pruebas unitarias y de extremo a extremo contra una API simulada
+pnpm test          # unit and end-to-end tests against a simulated API
 pnpm type-check
-pnpm dev:server    # con Wealthfolio en modo desarrollo de add-ons
-pnpm bundle        # genera dist/wealthfolio-enable-banking-sync-addon-<versión>.zip
+pnpm dev:server    # with Wealthfolio in add-on development mode
+pnpm bundle        # builds dist/wealthfolio-enable-banking-sync-addon-<version>.zip
 ```
 
-Estructura:
+Structure:
 
-- `src/lib/jwt.ts`: firma RS256 del JWT de Enable Banking con WebCrypto (claves PKCS#8 y PKCS#1).
-- `src/lib/enable-banking-client.ts`: cliente de la API. El broker de red de Wealthfolio no
-  permite la cabecera `Authorization`, así que el JWT se guarda como secreto (`api-jwt`) y se
-  envía con `auth.secretKey`.
-- `src/lib/connect.ts`: autorización del banco (`/auth` → `/sessions`) y renovación.
-- `src/lib/mapping.ts`: conversión de movimientos a `ActivityImport`.
-- `src/lib/sync.ts`: descarga, `checkImport` e `import`, retención de pendientes y rechazados.
-- `src/lib/transfers.ts`: emparejado de traspasos sin IBAN.
-- `src/lib/balance.ts`: elección y comparación del saldo.
-- `scripts/package.mjs`: genera el ZIP sin depender de `zip` (funciona en Windows).
-- `src/components`, `src/pages`: interfaz.
+- `src/lib/jwt.ts`: RS256 signing of the Enable Banking JWT with WebCrypto (PKCS#8 and PKCS#1
+  keys).
+- `src/lib/enable-banking-client.ts`: API client. Wealthfolio's network broker does not allow the
+  `Authorization` header, so the JWT is stored as a secret (`api-jwt`) and sent with
+  `auth.secretKey`.
+- `src/lib/connect.ts`: bank authorization (`/auth` → `/sessions`) and renewal.
+- `src/lib/mapping.ts`: conversion of transactions to `ActivityImport`.
+- `src/lib/sync.ts`: download, `checkImport` and `import`, holding back pending and rejected
+  transactions.
+- `src/lib/transfers.ts`: pairing of transfers without IBAN.
+- `src/lib/balance.ts`: choosing and comparing the balance.
+- `src/lib/messages.ts`: translatable messages for code outside React.
+- `src/i18n`: interface texts. `es.ts` is the original; `en.ts` must have the same keys
+  (checked by `test/i18n.test.ts`).
+- `scripts/package.mjs`: builds the ZIP without needing `zip` (works on Windows).
+- `src/components`, `src/pages`: interface.
+
+## License and notices
+
+[MIT](LICENSE).
+
+This add-on is independent: it is not made, reviewed or endorsed by Wealthfolio or Enable
+Banking. Wealthfolio is a trademark of Teymz Inc. Enable Banking and the bank names belong to
+their respective owners.

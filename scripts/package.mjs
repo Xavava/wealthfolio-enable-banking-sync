@@ -1,5 +1,5 @@
 // Builds dist/<package name>-<version>.zip with what Wealthfolio installs:
-// manifest.json, dist/addon.js, README.md and assets/ (if any). No source maps.
+// manifest.json, dist/addon.js, the READMEs, LICENSE and assets/ (if any). No source maps.
 // Pure Node (zlib), so it works the same on Windows, macOS and Linux.
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -29,6 +29,8 @@ function walk(dir) {
 const files = [
   join(root, 'manifest.json'),
   join(root, 'README.md'),
+  join(root, 'README.es.md'),
+  join(root, 'LICENSE'),
   ...walk(join(root, 'dist')).filter((f) => !f.endsWith('.map') && !f.endsWith('.zip')),
   ...walk(join(root, 'assets')),
 ].map((full) => ({ full, name: relative(root, full).split('\\').join('/') }));

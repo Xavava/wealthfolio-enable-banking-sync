@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.4.0] - 2026-11-21
+
+### Added
+
+- Interfaz en inglés además de en español: sigue el idioma de Wealthfolio, y cualquier idioma sin
+  traducción se muestra en inglés. Los mensajes de la sincronización también se traducen, incluido
+  el último informe guardado.
+- Fechas e importes con el formato regional que tengas en Wealthfolio, en lugar de fijo en español.
+- README en inglés (`README.md`) y en español (`README.es.md`), licencia MIT (`LICENSE`) y avisos
+  de marcas y de seguridad.
+
+### Changed
+
+- La descripción, la entrada de la barra lateral («Bank sync») y la explicación de los permisos
+  del manifest están en inglés: Wealthfolio solo admite un idioma para ellos.
+- El aviso de que el banco no compartió ninguna cuenta explica que hay que vincular en Enable
+  Banking cada cuenta que se quiera usar.
+
 ## [1.3.0] - 2026-11-20
 
 ### Changed

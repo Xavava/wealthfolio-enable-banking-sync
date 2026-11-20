@@ -1,6 +1,7 @@
 import type { EbAccount, EbAspsp } from './eb-types';
 import type { EnableBankingClient } from './enable-banking-client';
 import { toLinkedAccount } from './mapping';
+import { LocalizedError, msg } from './messages';
 import type { BankConnection, LinkedAccount, PendingAuthorization } from './state';
 
 const DAY_SECONDS = 86_400;
@@ -79,17 +80,13 @@ export async function completeBankAuthorization(
 ): Promise<{ connections: BankConnection[]; connection: BankConnection; replaced?: BankConnection }> {
   const parsed = parseRedirect(redirectInput);
   if (parsed.error) {
-    throw new Error(
-      `El banco devolvió un error: ${parsed.errorDescription ?? parsed.error}. Vuelve a generar el enlace.`,
-    );
+    throw new LocalizedError(msg('errors.bankError', { detail: parsed.errorDescription ?? parsed.error }));
   }
   if (!parsed.code) {
-    throw new Error('No encuentro el parámetro "code" en lo que has pegado. Pega la URL completa.');
+    throw new LocalizedError(msg('errors.missingCode'));
   }
   if (parsed.state && parsed.state !== pending.state) {
-    throw new Error(
-      'Esta URL no corresponde al último enlace generado. Genera uno nuevo y vuelve a autorizar.',
-    );
+    throw new LocalizedError(msg('errors.stateMismatch'));
   }
 
   const session = await client.createSession(parsed.code);
@@ -103,9 +100,7 @@ export async function completeBankAuthorization(
     }
   }
   if (accounts.length === 0) {
-    throw new Error(
-      'El banco no ha compartido ninguna cuenta. En modo restringido, vincula primero tus cuentas en el panel de Enable Banking («Link accounts»).',
-    );
+    throw new LocalizedError(msg('errors.noAccounts'));
   }
 
   const aspsp = session.aspsp ?? pending.aspsp;

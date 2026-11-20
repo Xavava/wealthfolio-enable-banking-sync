@@ -1,8 +1,8 @@
 {
   "id": "enable-banking-sync",
   "name": "Enable Banking Sync",
-  "version": "1.3.0",
-  "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (PSD2)",
+  "version": "1.4.0",
+  "description": "Sync your bank account transactions with one click through Enable Banking (PSD2)",
   "author": "Abel Marin",
   "main": "dist/addon.js",
   "sdkVersion": "3.13.1",
@@ -19,7 +19,7 @@
         {
           "id": "enable-banking-sync",
           "route": "enable-banking-sync",
-          "label": "Sincronizar bancos",
+          "label": "Bank sync",
           "icon": "bank",
           "order": 100
         }
@@ -47,7 +47,7 @@
       "functions": [
         "getAll"
       ],
-      "purpose": "Listar tus cuentas de Wealthfolio para asociar cada cuenta bancaria con una de ellas"
+      "purpose": "List your Wealthfolio accounts so you can choose which one each bank account syncs into"
     },
     {
       "category": "activities",
@@ -55,14 +55,14 @@
         "checkImport",
         "import"
       ],
-      "purpose": "Validar e importar los movimientos descargados del banco, sin duplicar los ya importados"
+      "purpose": "Validate and import the transactions downloaded from the bank, without duplicating the ones already imported"
     },
     {
       "category": "portfolio",
       "functions": [
         "getLatestValuations"
       ],
-      "purpose": "Leer el saldo de cada cuenta en Wealthfolio para compararlo con el saldo que da el banco"
+      "purpose": "Read each account's balance in Wealthfolio to compare it with the balance the bank reports"
     },
     {
       "category": "secrets",
@@ -72,21 +72,21 @@
         "use",
         "delete"
       ],
-      "purpose": "Guardar cifrada la clave privada de tu aplicación de Enable Banking y el token temporal con el que se firman las peticiones"
+      "purpose": "Store your Enable Banking application's private key encrypted, and the short-lived token that signs the requests"
     },
     {
       "category": "network",
       "functions": [
         "request"
       ],
-      "purpose": "Consultar bancos, autorizaciones y movimientos en api.enablebanking.com"
+      "purpose": "Query banks, authorizations and transactions at api.enablebanking.com"
     },
     {
       "category": "events",
       "functions": [
         "onUpdateComplete"
       ],
-      "purpose": "Actualizar la comparación de saldos cuando Wealthfolio termina de recalcular la cartera"
+      "purpose": "Refresh the balance comparison when Wealthfolio finishes recalculating the portfolio"
     }
   ],
   "keywords": [
@@ -94,7 +94,9 @@
     "addon",
     "enable-banking",
     "psd2",
-    "sync"
+    "sync",
+    "bank",
+    "banking"
   ],
   "license": "MIT"
 }

@@ -1,3 +1,4 @@
+import { LocalizedError, msg } from './messages';
 // RS256 JWT signing for the Enable Banking API, using WebCrypto.
 //
 // Enable Banking authenticates every API call with a short-lived JWT signed with
@@ -64,23 +65,21 @@ function pkcs1ToPkcs8(pkcs1: Uint8Array): Uint8Array {
 export function pemToPkcs8Der(pem: string): Uint8Array {
   const match = pem.match(/-----BEGIN ([A-Z ]+)-----([\s\S]*?)-----END \1-----/);
   if (!match) {
-    throw new Error(
-      'La clave privada no tiene formato PEM. Debe empezar por "-----BEGIN PRIVATE KEY-----".',
-    );
+    throw new LocalizedError(msg('errors.pemFormat'));
   }
   const label = match[1];
   const der = base64Decode(match[2].replace(/[^A-Za-z0-9+/=]/g, ''));
   if (label === 'PRIVATE KEY') return der;
   if (label === 'RSA PRIVATE KEY') return pkcs1ToPkcs8(der);
   if (label === 'ENCRYPTED PRIVATE KEY') {
-    throw new Error('La clave privada está cifrada con contraseña. Usa la clave sin cifrar (.pem).');
+    throw new LocalizedError(msg('errors.pemEncrypted'));
   }
-  throw new Error(`Tipo de clave no soportado: "${label}". Se esperaba una clave privada RSA.`);
+  throw new LocalizedError(msg('errors.keyType', { label }));
 }
 
 export async function importRsaPrivateKey(pem: string): Promise<CryptoKey> {
   if (!globalThis.crypto?.subtle) {
-    throw new Error('WebCrypto no está disponible en este entorno; no se puede firmar el token.');
+    throw new LocalizedError(msg('errors.noWebCrypto'));
   }
   const der = pemToPkcs8Der(pem);
   try {
@@ -92,7 +91,7 @@ export async function importRsaPrivateKey(pem: string): Promise<CryptoKey> {
       ['sign'],
     );
   } catch {
-    throw new Error('No se pudo leer la clave privada. Comprueba que es la clave RSA de tu aplicación.');
+    throw new LocalizedError(msg('errors.keyUnreadable'));
   }
 }
 

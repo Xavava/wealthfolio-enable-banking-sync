@@ -13,8 +13,12 @@ import type {
   EbTransactionsResponse,
 } from './eb-types';
 import { createEnableBankingJwt } from './jwt';
+import { LocalizedError, msg, type Msg } from './messages';
 
 export const API_BASE_URL = 'https://api.enablebanking.com';
+
+/** Name shown in Wealthfolio's add-on list (manifest `name`), used in instructions. */
+export const ADDON_NAME = 'Enable Banking Sync';
 
 /** Secret holding the application's private key (PEM). */
 export const PRIVATE_KEY_SECRET = 'private-key';
@@ -41,7 +45,7 @@ export type EnableBankingHost = Pick<HostAPI, 'network' | 'secrets'>;
  * add-on was installed or updated without approving api.enablebanking.com under
  * "Hosts de red", which leaves it without internet access.
  */
-export class NetworkBlockedError extends Error {
+export class NetworkBlockedError extends LocalizedError {
   readonly hostCode?: string;
 
   constructor(cause: unknown) {
@@ -50,24 +54,27 @@ export class NetworkBlockedError extends Error {
       cause && typeof cause === 'object' && typeof (cause as { code?: unknown }).code === 'string'
         ? (cause as { code: string }).code
         : undefined;
+    const fullDetail = [detail, code && `[${code}]`].filter(Boolean).join(' ');
     super(
-      'Wealthfolio no ha dejado salir la petición a api.enablebanking.com. Suele pasar al ' +
-        'instalar o actualizar el add-on sin marcar el acceso a internet: ve a Ajustes → ' +
-        'Complementos, pasa el ratón por Enable Banking Sync, pulsa el icono del ojo («Ver ' +
-        'permisos»), marca api.enablebanking.com en «Hosts de red» y pulsa Guardar. Si ya está ' +
-        'marcado, comprueba tu conexión a internet.' +
-        (detail || code ? ` (Detalle: ${[detail, code && `[${code}]`].filter(Boolean).join(' ')})` : ''),
+      fullDetail
+        ? msg('errors.networkBlockedDetail', { addon: ADDON_NAME, detail: fullDetail })
+        : msg('errors.networkBlocked', { addon: ADDON_NAME }),
     );
     this.name = 'NetworkBlockedError';
     this.hostCode = code;
   }
 }
 
+/**
+ * An error answered by Enable Banking. `message` is the API's own text (in
+ * English); `msg`, when present, adds advice in the user's language.
+ */
 export class EnableBankingError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly errorCode?: string,
+    readonly msg?: Msg,
   ) {
     super(message);
     this.name = 'EnableBankingError';
@@ -94,16 +101,14 @@ function describeError(status: number, body: EbErrorBody | undefined, raw: strin
         ? JSON.stringify(body.detail)
         : '';
   const base = body?.message || raw.slice(0, 300) || `HTTP ${status}`;
-  let hint = '';
+  const message = [base, detail].filter(Boolean).join(' — ') + (code ? ` [${code}]` : '');
+  let advice: Msg | undefined;
   if (status === 401) {
-    hint =
-      ' Revisa el ID de aplicación y la clave privada; si son correctos, puede que el consentimiento del banco haya caducado.';
+    advice = msg('errors.apiUnauthorized', { detail: message });
   } else if (status === 429 || (code ?? '').toUpperCase().includes('RATE')) {
-    hint =
-      ' El banco limita el número de consultas diarias (PSD2 permite ~4 consultas automáticas al día por cuenta). Inténtalo más tarde.';
+    advice = msg('errors.apiRateLimited', { detail: message });
   }
-  const message = [base, detail].filter(Boolean).join(' — ') + (code ? ` [${code}]` : '') + hint;
-  return new EnableBankingError(message, status, code);
+  return new EnableBankingError(message, status, code, advice);
 }
 
 interface TokenCache {
@@ -130,7 +135,7 @@ export class EnableBankingClient {
     private readonly applicationId: string,
   ) {
     if (!applicationId.trim()) {
-      throw new Error('Falta el ID de la aplicación de Enable Banking.');
+      throw new LocalizedError(msg('errors.missingAppId'));
     }
   }
 
@@ -146,7 +151,7 @@ export class EnableBankingClient {
     }
     const pem = await this.host.secrets.get(PRIVATE_KEY_SECRET);
     if (!pem) {
-      throw new Error('No hay clave privada guardada. Configura Enable Banking primero.');
+      throw new LocalizedError(msg('errors.missingKey'));
     }
     const jwt = await createEnableBankingJwt(this.applicationId.trim(), pem, {
       lifetimeSeconds: TOKEN_LIFETIME_SECONDS,
@@ -299,8 +304,6 @@ export class EnableBankingClient {
       continuationKey = response.continuation_key ?? undefined;
       if (!continuationKey) return all;
     }
-    throw new Error(
-      `Demasiadas páginas de movimientos (>${MAX_TRANSACTION_PAGES}). Reduce el rango de fechas.`,
-    );
+    throw new LocalizedError(msg('errors.tooManyPages', { max: MAX_TRANSACTION_PAGES }));
   }
 }
