@@ -57,8 +57,16 @@ export function syncStartDate(account: LinkedAccount): string {
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
+  // Host API rejections may carry a stable `code` (SDK 3.13.1); their message is
+  // localized and generic, so show the code too.
+  const code =
+    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : undefined;
+  if (error instanceof Error) return code && !error.message.includes(code) ? `${error.message} [${code}]` : error.message;
   if (typeof error === 'string') return error;
+  const message = (error as { message?: unknown } | null)?.message;
+  if (typeof message === 'string') return code ? `${message} [${code}]` : message;
   try {
     return JSON.stringify(error);
   } catch {
@@ -234,11 +242,19 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
 
   let importError: string | undefined;
   let importSucceeded = true;
+  let validationFailed = false;
   let ownTransfers = 0;
 
   if (allRows.length > 0) {
     onProgress?.(`Validando ${allRows.length} movimiento(s) con Wealthfolio…`);
-    const checked = await host.activities.checkImport(allRows);
+    // A rejected call (not a rejected row) must not abort the sync: report it, keep
+    // the balances read so far and leave every window where it was.
+    const checked = await host.activities.checkImport(allRows).catch((error: unknown) => {
+      validationFailed = true;
+      importSucceeded = false;
+      importError = `Wealthfolio no pudo validar los movimientos: ${errorMessage(error)}`;
+      return [] as ActivityImport[];
+    });
     const fresh: FreshRow[] = [];
 
     checked.forEach((row, index) => {
@@ -318,7 +334,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   const oldestRetry = addDays(today, -MAX_RETRY_DAYS);
   for (const entry of work) {
     const { account, result } = entry;
-    if (!importSucceeded && entry.freshRows > 0) {
+    if (!importSucceeded && (entry.freshRows > 0 || (validationFailed && entry.rows.length > 0))) {
       result.status = 'error';
       result.message = importError;
       continue;

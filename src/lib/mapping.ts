@@ -215,6 +215,10 @@ export async function mapTransactions(
       accountId: options.wealthfolioAccountId,
       activityType,
       date,
+      // Cash movement: no asset. The SDK type marks `symbol` optional, but the host
+      // requires the field (an empty string for cash, as in Wealthfolio's addon docs);
+      // without it checkImport/import fail with a generic internal error.
+      symbol: '',
       amount,
       currency,
       comment: buildComment(tx),

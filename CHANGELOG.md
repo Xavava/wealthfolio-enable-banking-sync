@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.3] - 2026-11-20
+
+### Fixed
+
+- Ningún movimiento llegaba a Wealthfolio: la sincronización fallaba con «No se pudo completar
+  la operación». Wealthfolio exige el campo `symbol` en cada fila (vacío para movimientos de
+  efectivo), aunque el tipo del SDK lo marca como opcional, y el add-on no lo enviaba.
+- Si Wealthfolio rechaza la validación entera, el error aparece en el informe con su código y
+  se conservan los saldos leídos, en lugar de abortar la sincronización con un mensaje genérico.
+
 ## [1.2.2] - 2026-11-20
 
 ### Fixed

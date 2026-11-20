@@ -1,7 +1,7 @@
 {
   "id": "enable-banking-sync",
   "name": "Enable Banking Sync",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (PSD2)",
   "author": "Abel Marin",
   "main": "dist/addon.js",

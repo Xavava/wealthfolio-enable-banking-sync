@@ -40,7 +40,7 @@ Enable Banking es gratuito para uso personal con tus propias cuentas (modo «res
 ## 2. Instala el add-on
 
 En Wealthfolio, ve a **Ajustes → Add-ons**, elige instalar desde archivo y selecciona
-`wealthfolio-enable-banking-sync-addon-1.2.2.zip`. Acepta los permisos:
+`wealthfolio-enable-banking-sync-addon-1.2.3.zip`. Acepta los permisos:
 
 | Permiso | Para qué |
 | --- | --- |

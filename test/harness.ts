@@ -144,17 +144,42 @@ export class FakeActivities {
   rejectInImport: (row: ActivityImport) => boolean = () => false;
   imports: ActivityImport[][] = [];
 
+  /** Makes the next checkImport call fail as a whole, like a host error. */
+  failCheckCall = false;
+
+  /**
+   * Wealthfolio deserializes each row into a Rust struct whose `date`, `symbol`,
+   * `activityType` and `currency` are required strings and `isDraft`/`isValid`
+   * required booleans (the SDK type marks `symbol` optional). A row without them
+   * fails the whole call with a generic internal error.
+   */
+  private assertHostShape(rows: ActivityImport[]) {
+    for (const row of rows) {
+      const record = row as unknown as Record<string, unknown>;
+      for (const field of ['date', 'symbol', 'activityType', 'currency']) {
+        if (typeof record[field] !== 'string') throw hostError(`missing field \`${field}\``);
+      }
+      for (const field of ['isDraft', 'isValid']) {
+        if (typeof record[field] !== 'boolean') throw hostError(`missing field \`${field}\``);
+      }
+    }
+  }
+
   private isDuplicate(row: ActivityImport) {
     return this.stored.some((s) => s.accountId === row.accountId && s.sourceRecordId === row.sourceRecordId);
   }
 
-  checkImport = async (rows: ActivityImport[]) =>
-    rows.map((row) => {
+  checkImport = async (rows: ActivityImport[]) => {
+    this.assertHostShape(rows);
+    if (this.failCheckCall) throw hostError('database is locked');
+    return rows.map((row) => {
       if (this.rejectInCheck(row)) return { ...row, isValid: false, errors: { amount: ['rechazado'] } };
       return this.isDuplicate(row) ? { ...row, duplicateOfId: 'existing' } : { ...row };
     });
+  };
 
   import = async (rows: ActivityImport[]) => {
+    this.assertHostShape(rows);
     this.imports.push(rows);
     if (this.failImport) {
       return {
@@ -182,6 +207,11 @@ export class FakeActivities {
       },
     };
   };
+}
+
+/** A rejected host call: generic localized message plus a stable code, as in SDK 3.13.1. */
+function hostError(detail: string): Error {
+  return Object.assign(new Error('No se pudo completar la operación.'), { code: 'internal', detail });
 }
 
 export interface Harness {

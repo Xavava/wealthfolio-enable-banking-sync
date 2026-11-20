@@ -87,6 +87,26 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
     expect(connections[0].accounts.every((a) => !a.lastSyncedDate)).toBe(true);
   });
 
+  it('sends rows Wealthfolio can read: cash movements carry an empty symbol', async () => {
+    const { connections: connected } = await connect(h.host);
+    await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(h.activities.stored.length).toBeGreaterThan(0);
+    expect(h.activities.stored.every((r) => r.symbol === '')).toBe(true);
+  });
+
+  it('reports a rejected validation call instead of failing the whole sync', async () => {
+    const { connections: connected } = await connect(h.host);
+    h.activities.failCheckCall = true;
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(report.importError).toBe('Wealthfolio no pudo validar los movimientos: No se pudo completar la operación. [internal]');
+    expect(report.accounts.map((a) => a.status)).toEqual(['error', 'error']);
+    expect(report.imported).toBe(0);
+    // Nothing advances, so the next sync reads the same movements again…
+    expect(connections[0].accounts.every((a) => !a.lastSyncedDate)).toBe(true);
+    // …but what was read from the bank is kept.
+    expect(connections[0].accounts[0].bankBalance?.amount).toBe('1480.00');
+  });
+
   it('reports a clear error when the private key does not match the application', async () => {
     const other = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
     h.secrets.set(PRIVATE_KEY_SECRET, other.export({ type: 'pkcs8', format: 'pem' }).toString());
