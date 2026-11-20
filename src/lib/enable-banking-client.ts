@@ -4,6 +4,8 @@ import type {
   EbApplication,
   EbAspsp,
   EbAspspsResponse,
+  EbBalance,
+  EbBalancesResponse,
   EbErrorBody,
   EbSession,
   EbStartAuthResponse,
@@ -211,6 +213,14 @@ export class EnableBankingClient {
 
   getAccountDetails(accountUid: string): Promise<EbAccount> {
     return this.request<EbAccount>('GET', `/accounts/${encodeURIComponent(accountUid)}/details`);
+  }
+
+  async getBalances(accountUid: string): Promise<EbBalance[]> {
+    const response = await this.request<EbBalancesResponse>(
+      'GET',
+      `/accounts/${encodeURIComponent(accountUid)}/balances`,
+    );
+    return response?.balances ?? [];
   }
 
   /** Fetches every page of transactions for the account in the date range. */

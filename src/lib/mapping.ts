@@ -59,6 +59,18 @@ export function transactionDate(tx: EbTransaction): string | null {
   return value ? value.slice(0, 10) : null;
 }
 
+/**
+ * Earliest date a pending movement carries. The booked version keeps a booking
+ * date on or after it, so reading again from here is enough to pick it up.
+ */
+export function pendingDate(tx: EbTransaction): string | null {
+  const dates = [tx.transaction_date, tx.value_date, tx.booking_date]
+    .filter((d): d is string => Boolean(d))
+    .map((d) => d.slice(0, 10))
+    .sort();
+  return dates[0] ?? null;
+}
+
 function remittanceText(tx: EbTransaction): string {
   const info = tx.remittance_information;
   const text = Array.isArray(info) ? info.join(' ') : (info ?? '');

@@ -6,6 +6,25 @@ export interface AddonConfig {
   redirectUrl?: string;
   /** Classify incoming "intereses" movements as INTEREST (default true). */
   detectInterest?: boolean;
+  /**
+   * Pair a withdrawal and a deposit of the same amount between two synced accounts
+   * as an internal transfer when the bank gives no IBAN (card repayments, top-ups,
+   * "traspasos"). Default true.
+   */
+  detectOwnTransfers?: boolean;
+}
+
+/** Balance reported by the bank for an account. */
+export interface BankBalance {
+  /** Signed decimal string as reported by the bank. */
+  amount: string;
+  currency: string;
+  /** ISO 20022 balance type (CLBD, ITBD, CLAV…). */
+  type: string;
+  /** Date the balance refers to (YYYY-MM-DD), when the bank gives one. */
+  referenceDate?: string;
+  /** ISO timestamp when the add-on fetched it. */
+  fetchedAt: string;
 }
 
 /** A bank account exposed by an Enable Banking session. */
@@ -26,6 +45,18 @@ export interface LinkedAccount {
   lastSyncedDate?: string;
   /** ISO timestamp of the last successful sync. */
   lastSyncedAt?: string;
+  /**
+   * Earliest date (YYYY-MM-DD) the next sync must read again: movements that were
+   * still pending or that Wealthfolio rejected. Absent when nothing is held back.
+   */
+  retryFrom?: string;
+  /**
+   * Date (YYYY-MM-DD) of the latest movement already in the Wealthfolio account that
+   * this add-on did not import (e.g. a CSV import), found when the account was chosen.
+   */
+  existingUntil?: string;
+  /** Last balance reported by the bank (fetched at most once a day). */
+  bankBalance?: BankBalance;
 }
 
 export interface BankConnection {
@@ -54,16 +85,24 @@ export interface InvalidRowInfo {
   errors: string[];
 }
 
+export type SyncStatus = 'ok' | 'error' | 'reconnect' | 'blocked';
+
 export interface SyncAccountResult {
   bank: string;
   account: string;
-  status: 'ok' | 'error' | 'reconnect';
+  status: SyncStatus;
   fetched: number;
   imported: number;
   duplicates: number;
   invalid: number;
+  /** Pending movements left for a later sync. */
+  pending?: number;
+  /** Movements paired as internal transfers by amount and date (no IBAN). */
+  ownTransfers?: number;
   dateFrom?: string;
   message?: string;
+  /** Extra notes (held-back movements, balance problems…). */
+  notes?: string[];
 }
 
 export interface SyncReport {
@@ -72,6 +111,7 @@ export interface SyncReport {
   imported: number;
   duplicates: number;
   invalid: number;
+  ownTransfers?: number;
   accounts: SyncAccountResult[];
   invalidRows: InvalidRowInfo[];
   importError?: string;
@@ -126,6 +166,36 @@ export function toIsoDate(date: Date): string {
 export function addDays(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split('-').map(Number);
   return toIsoDate(new Date(y, m - 1, d + days));
+}
+
+/** Whole days from `a` to `b` (both YYYY-MM-DD). */
+export function daysBetween(a: string, b: string): number {
+  const toUtc = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((toUtc(b) - toUtc(a)) / 86_400_000);
+}
+
+/**
+ * Calendar date (YYYY-MM-DD) of a value coming from the host: a plain date is kept
+ * as is; a timestamp is read in the local time zone, like the rest of the UI.
+ */
+export function toDateOnly(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : toIsoDate(date);
+}
+
+/** YYYY-MM-DD → DD/MM/YYYY, for messages. */
+export function formatIsoDate(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : iso;
+}
+
+export function minDate(dates: Array<string | null | undefined>): string | undefined {
+  return dates.filter((d): d is string => Boolean(d)).sort()[0];
 }
 
 export function isExpired(connection: BankConnection, now = new Date()): boolean {

@@ -1,15 +1,19 @@
 {
   "id": "enable-banking-sync",
   "name": "Enable Banking Sync",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
   "author": "Anonymous",
   "main": "dist/addon.js",
   "sdkVersion": "3.13.1",
-  "minWealthfolioVersion": "3.13.0",
+  "minWealthfolioVersion": "3.13.1",
   "enabled": true,
   "contributes": {
-    "routes": [{ "id": "enable-banking-sync" }],
+    "routes": [
+      {
+        "id": "enable-banking-sync"
+      }
+    ],
     "links": {
       "sidebar": [
         {
@@ -23,7 +27,9 @@
     }
   },
   "network": {
-    "allowedHosts": ["api.enablebanking.com"]
+    "allowedHosts": [
+      "api.enablebanking.com"
+    ]
   },
   "hostDependencies": {
     "@tanstack/react-query": "^5.90.0",
@@ -38,25 +44,59 @@
   "permissions": [
     {
       "category": "accounts",
-      "functions": ["getAll"],
+      "functions": [
+        "getAll"
+      ],
       "purpose": "Listar tus cuentas de Wealthfolio para asociar cada cuenta bancaria con una de ellas"
     },
     {
       "category": "activities",
-      "functions": ["checkImport", "import"],
-      "purpose": "Validar e importar los movimientos descargados del banco, sin duplicar los ya importados"
+      "functions": [
+        "search",
+        "checkImport",
+        "import"
+      ],
+      "purpose": "Validar e importar los movimientos descargados del banco sin duplicar los ya importados, y consultar la fecha del último movimiento de cada cuenta para no solapar lo que ya tenías (por ejemplo, de un CSV)"
+    },
+    {
+      "category": "portfolio",
+      "functions": [
+        "getLatestValuations"
+      ],
+      "purpose": "Leer el saldo de cada cuenta en Wealthfolio para compararlo con el saldo que da el banco"
     },
     {
       "category": "secrets",
-      "functions": ["set", "get", "use", "delete"],
+      "functions": [
+        "set",
+        "get",
+        "use",
+        "delete"
+      ],
       "purpose": "Guardar cifrada la clave privada de tu aplicación de Enable Banking y el token temporal con el que se firman las peticiones"
     },
     {
       "category": "network",
-      "functions": ["request"],
+      "functions": [
+        "request"
+      ],
       "purpose": "Consultar bancos, autorizaciones y movimientos en api.enablebanking.com"
+    },
+    {
+      "category": "events",
+      "functions": [
+        "onUpdateComplete"
+      ],
+      "purpose": "Actualizar la comparación de saldos cuando Wealthfolio termina de recalcular la cartera"
     }
   ],
-  "keywords": ["wealthfolio", "addon", "enable-banking", "open-banking", "psd2", "sync"],
+  "keywords": [
+    "wealthfolio",
+    "addon",
+    "enable-banking",
+    "open-banking",
+    "psd2",
+    "sync"
+  ],
   "license": "MIT"
 }

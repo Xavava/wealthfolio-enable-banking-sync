@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-enable-banking-sync-addon",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Sincroniza con un botón los movimientos de tus cuentas bancarias vía Enable Banking (Open Banking PSD2)",
   "type": "module",
   "main": "dist/addon.js",
@@ -16,8 +16,8 @@
     "build": "vite build",
     "dev": "vite build --watch",
     "dev:server": "wealthfolio-addon dev",
-    "clean": "rm -rf dist",
-    "package": "mkdir -p dist assets && find dist -name '*.map' -delete && zip -r dist/$npm_package_name-$npm_package_version.zip manifest.json dist/ assets/ README.md -x '*.map'",
+    "clean": "node scripts/clean.mjs",
+    "package": "node scripts/package.mjs",
     "bundle": "pnpm clean && pnpm build && pnpm package",
     "lint": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "type-check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
@@ -52,5 +52,11 @@
     "typescript": "^5.9.2",
     "vite": "^7.1.5",
     "vitest": "3.2.4"
+  },
+  "packageManager": "pnpm@10.34.9+sha512.f49b5a8ea0fdedb44bb3c0c1d6575092a53c2950d95b7ad15df11f17974877a2de3a01c07e934e9b28ce716e51c09a94962c7306d09be2e1e4b18a8c8762fd32",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

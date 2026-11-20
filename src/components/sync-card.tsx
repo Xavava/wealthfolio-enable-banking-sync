@@ -13,14 +13,15 @@ import {
 } from '@wealthfolio/ui';
 import { LoaderCircle, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { store, type SyncReport } from '../lib/state';
+import { store, type SyncReport, type SyncStatus } from '../lib/state';
 import { runSync } from '../lib/sync';
 import { QK, useAddonCtx, useSaveConnections, type AddonState } from '../hooks/use-addon-data';
 import { errorText, formatDate, formatDateTime } from './ui-bits';
 
-function StatusBadge({ status }: { status: 'ok' | 'error' | 'reconnect' }) {
+function StatusBadge({ status }: { status: SyncStatus }) {
   if (status === 'ok') return <Badge variant="success-subtle">OK</Badge>;
   if (status === 'reconnect') return <Badge variant="warning-subtle">Renovar</Badge>;
+  if (status === 'blocked') return <Badge variant="warning-subtle">Revisar fecha</Badge>;
   return <Badge variant="destructive-subtle">Error</Badge>;
 }
 
@@ -30,6 +31,7 @@ function ReportView({ report }: { report: SyncReport }) {
       <div className="text-muted-foreground text-sm">
         Última sincronización: {formatDateTime(report.finishedAt)} · <b>{report.imported}</b> nuevo(s) ·{' '}
         {report.duplicates} ya importado(s)
+        {(report.ownTransfers ?? 0) > 0 && <> · {report.ownTransfers} traspaso(s) entre tus cuentas</>}
         {report.invalid > 0 && <> · <span className="text-destructive">{report.invalid} con errores</span></>}
       </div>
       {report.importError && (
@@ -56,7 +58,18 @@ function ReportView({ report }: { report: SyncReport }) {
                   <td className="px-3 py-2">
                     <div className="font-medium">{row.account}</div>
                     <div className="text-muted-foreground text-xs">{row.bank}</div>
-                    {row.message && <div className="text-muted-foreground mt-1 max-w-md text-xs">{row.message}</div>}
+                    {row.message && (
+                      <div
+                        className={`mt-1 max-w-md text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400'}`}
+                      >
+                        {row.message}
+                      </div>
+                    )}
+                    {row.notes?.map((note, i) => (
+                      <div key={i} className="text-muted-foreground mt-1 max-w-md text-xs">
+                        {note}
+                      </div>
+                    ))}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(row.dateFrom)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{row.fetched}</td>
@@ -103,6 +116,7 @@ export function SyncCard({ state }: { state: AddonState }) {
 
   const mapped = state.connections.flatMap((c) => c.accounts).filter((a) => a.wealthfolioAccountId);
   const detectInterest = state.config.detectInterest ?? true;
+  const detectOwnTransfers = state.config.detectOwnTransfers ?? true;
 
   const sync = async () => {
     if (running) return;
@@ -115,11 +129,13 @@ export function SyncCard({ state }: { state: AddonState }) {
         config: state.config,
         connections: state.connections,
         detectInterest,
+        detectOwnTransfers,
         onProgress: setProgress,
       });
       await saveConnections(connections);
       await store.saveLastReport(ctx.api.storage, report);
       await queryClient.invalidateQueries({ queryKey: QK.state });
+      await queryClient.invalidateQueries({ queryKey: QK.valuations });
       if (report.imported > 0) {
         ctx.api.query.invalidateQueries(QueryKeys.ACTIVITIES);
         ctx.api.query.invalidateQueries(QueryKeys.ACCOUNTS);
@@ -144,8 +160,8 @@ export function SyncCard({ state }: { state: AddonState }) {
     }
   };
 
-  const toggleInterest = async (value: boolean) => {
-    await store.saveConfig(ctx.api.storage, { ...state.config, detectInterest: value });
+  const saveOption = async (patch: Partial<AddonState['config']>) => {
+    await store.saveConfig(ctx.api.storage, { ...state.config, ...patch });
     await queryClient.invalidateQueries({ queryKey: QK.state });
   };
 
@@ -179,14 +195,29 @@ export function SyncCard({ state }: { state: AddonState }) {
           </Alert>
         )}
         {state.lastReport && !running && <ReportView report={state.lastReport} />}
-        <label className="text-muted-foreground flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            checked={detectInterest}
-            onChange={(e) => toggleInterest(e.target.checked)}
-          />
-          Registrar como «Intereses» los ingresos cuyo concepto contenga «intereses»
-        </label>
+        <div className="space-y-1">
+          <label className="text-muted-foreground flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={detectInterest}
+              onChange={(e) => saveOption({ detectInterest: e.target.checked })}
+            />
+            Registrar como «Intereses» los ingresos cuyo concepto contenga «intereses»
+          </label>
+          <label className="text-muted-foreground flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={detectOwnTransfers}
+              onChange={(e) => saveOption({ detectOwnTransfers: e.target.checked })}
+            />
+            <span>
+              Registrar como traspaso un cargo y un abono del mismo importe entre dos de tus cuentas
+              sincronizadas (hasta 3 días de diferencia) cuando una es de tarjeta o el concepto dice
+              «traspaso», «recarga» o «pago tarjeta»
+            </span>
+          </label>
+        </div>
       </CardContent>
     </Card>
   );

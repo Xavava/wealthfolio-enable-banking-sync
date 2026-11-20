@@ -9,11 +9,17 @@ Open Banking regulado (PSD2).
   claves del banco.
 - **Sin duplicados**: cada movimiento lleva un identificador estable (`sourceRecordId`) y
   Wealthfolio salta los que ya importaste. Puedes pulsar el botón todas las veces que quieras.
+- **No pierde movimientos**: los pendientes y los que Wealthfolio rechaza se vuelven a consultar
+  en cada sincronización hasta que entran.
+- **No duplica lo que ya tenías**: si la cuenta de Wealthfolio ya tiene movimientos de un CSV u
+  otra fuente, la primera sincronización empieza el día siguiente al último.
 - **Transferencias internas**: el dinero que mueves entre dos cuentas tuyas sincronizadas se
   registra como transferencia (`TRANSFER_OUT` / `TRANSFER_IN`), no como gasto e ingreso.
+- **Comprobación de saldo**: compara el saldo que da el banco con el de Wealthfolio.
 - Tus datos solo viajan entre tu equipo y `api.enablebanking.com`.
 
-Requiere **Wealthfolio 3.13 o superior**.
+Requiere **Wealthfolio 3.13.1 o superior** (en Windows, las versiones anteriores admiten unos 1.280 caracteres por
+secreto y no pueden guardar la clave privada, que ocupa más).
 
 ## 1. Crea tu aplicación en Enable Banking (una sola vez)
 
@@ -33,14 +39,16 @@ Enable Banking es gratuito para uso personal con tus propias cuentas (modo «res
 ## 2. Instala el add-on
 
 En Wealthfolio, ve a **Ajustes → Add-ons**, elige instalar desde archivo y selecciona
-`wealthfolio-enable-banking-sync-addon-1.0.0.zip`. Acepta los permisos:
+`wealthfolio-enable-banking-sync-addon-1.1.0.zip`. Acepta los permisos:
 
 | Permiso | Para qué |
 | --- | --- |
 | Cuentas (`getAll`) | Listar tus cuentas de Wealthfolio para asociarlas con las del banco |
-| Actividades (`checkImport`, `import`) | Validar e importar los movimientos |
+| Actividades (`search`, `checkImport`, `import`) | Ver hasta qué fecha llega cada cuenta, validar e importar los movimientos |
+| Cartera (`getLatestValuations`) | Leer el saldo de cada cuenta en Wealthfolio para compararlo con el del banco |
 | Secretos | Guardar cifrada la clave privada y el token temporal de acceso |
 | Red (`api.enablebanking.com`) | Hablar con Enable Banking |
+| Eventos (`onUpdateComplete`) | Refrescar la comparación de saldos cuando Wealthfolio termina de recalcular |
 
 Aparecerá **Sincronizar bancos** en la barra lateral.
 
@@ -57,7 +65,8 @@ Aparecerá **Sincronizar bancos** en la barra lateral.
 3. **Bancos conectados**: elige en qué cuenta de Wealthfolio entra cada cuenta bancaria.
    Conviene crear antes en Wealthfolio una cuenta de tipo *Efectivo* (o *Tarjeta de crédito*)
    por cada cuenta del banco. Elige también desde qué fecha importar la primera vez (por
-   defecto, 90 días atrás).
+   defecto, 90 días atrás). Si la cuenta de Wealthfolio ya tiene movimientos, la fecha se
+   ajusta sola al día siguiente al último (ver más abajo).
 4. Pulsa **Sincronizar ahora**. Verás cuántos movimientos se descargaron, cuántos eran nuevos
    y cuántos ya estaban.
 
@@ -73,6 +82,7 @@ historial.
 | Abono (`CRDT`) | `DEPOSIT` |
 | Abono cuyo concepto contiene «intereses» (desactivable) | `INTEREST` |
 | Cargo/abono hacia otra cuenta tuya sincronizada (mismo IBAN) | `TRANSFER_OUT` / `TRANSFER_IN` (internas) |
+| Cargo en una cuenta y abono del mismo importe en otra tuya, sin IBAN (desactivable) | `TRANSFER_OUT` / `TRANSFER_IN` (internas), ver abajo |
 | Movimiento pendiente (`PDNG`) | No se importa hasta que el banco lo contabilice |
 
 El comentario de cada actividad lleva la contraparte y el concepto (`MERCADONA · COMPRA TARJ.
@@ -82,17 +92,64 @@ operación) se guardan en los metadatos de la actividad.
 En cada sincronización se vuelven a leer los 7 días anteriores a la última, para recoger
 movimientos que el banco contabiliza tarde. Los ya importados se saltan solos.
 
+Si quedó algún movimiento **pendiente** o **rechazado por Wealthfolio**, la siguiente
+sincronización empieza en su fecha, aunque sea más antigua, hasta que entre. Pasados 89 días
+se deja de intentar (los bancos no suelen dar más historial) y se avisa en el informe.
+
+### Traspasos sin IBAN
+
+Los pagos de la tarjeta de crédito, las recargas de una tarjeta prepago o los traspasos entre
+cuentas no siempre llevan el IBAN de la otra cuenta. Se registran como traspaso interno cuando,
+en la misma sincronización, hay un cargo en una cuenta y un abono **del mismo importe y
+divisa** en otra cuenta tuya sincronizada, con **3 días como mucho** entre ambos, y además:
+
+- una de las dos cuentas es de tipo *Tarjeta de crédito* en Wealthfolio, o
+- el concepto dice «traspaso», «recarga», «liquidación tarjeta», «pago tarjeta»…
+
+Una «transferencia» normal no cuenta, porque igual puede ser un pago a otra persona. Si un
+movimiento podría emparejarse con más de uno, no se toca. Wealthfolio enlaza solo las dos
+partes cuando tienen la misma fecha; si no, aparecen en el Centro de salud para enlazarlas con
+un clic. Se desactiva con la casilla de la tarjeta *Sincronización*.
+
+## Si ya importaste movimientos por CSV
+
+Wealthfolio solo reconoce que un movimiento del banco ya está si coinciden **todos** sus datos,
+comentario incluido, y los comentarios de un CSV casi nunca coinciden con los del banco. Para
+no duplicar nada:
+
+- Al elegir la cuenta de Wealthfolio, el add-on mira la fecha del último movimiento que **no**
+  importó él y propone empezar el día siguiente.
+- Si aun así la fecha de inicio cae dentro de ese historial, esa cuenta no se sincroniza
+  (estado *Revisar fecha*) y el informe dice desde qué día puedes empezar.
+
+Esto solo afecta a la primera sincronización de cada cuenta. Después, cada movimiento se
+reconoce por su identificador (`sourceRecordId`).
+
+## Comprobación de saldo
+
+En cada sincronización se lee el saldo de cada cuenta (como mucho una vez al día, por el
+límite de consultas PSD2), prefiriendo el saldo contabilizado. En *Bancos conectados* verás el
+saldo del banco junto al de Wealthfolio y si **cuadran**. Un descuadre suele indicar historial
+anterior a la fecha de inicio que falta, movimientos pendientes o rechazados, o que Wealthfolio
+aún no ha terminado de recalcular. En tarjetas de crédito el banco puede dar la deuda en
+positivo; se indica como «cuadra con el signo contrario».
+
 ## Limitaciones
 
 - **Consultas al día**: por PSD2, algunos bancos limitan las consultas sin el usuario delante a
   unas 4 al día por cuenta. Si ves un error de límite, espera unas horas.
 - **Histórico**: muchos bancos solo dan 90 días de movimientos (algo más justo después de
   autorizar).
-- No importa saldos ni categorías: usa las reglas de categorización de gastos de Wealthfolio.
+- No importa categorías: usa las reglas de categorización de gastos de Wealthfolio.
+- El saldo solo se compara, no se importa ni se corrige.
+- No todos los bancos dan acceso a las tarjetas (de crédito o prepago) por Open Banking; lo
+  sabrás al conectar el banco.
 - Es necesario copiar y pegar la URL de vuelta del banco, porque los add-ons se ejecutan en un
   sandbox sin acceso al navegador.
 
 ## Desarrollo
+
+Necesitas Node.js 24 y pnpm 10 (`corepack enable`).
 
 ```bash
 pnpm install
@@ -110,5 +167,9 @@ Estructura:
   envía con `auth.secretKey`.
 - `src/lib/connect.ts`: autorización del banco (`/auth` → `/sessions`) y renovación.
 - `src/lib/mapping.ts`: conversión de movimientos a `ActivityImport`.
-- `src/lib/sync.ts`: descarga, `checkImport` y `import`.
+- `src/lib/sync.ts`: descarga, `checkImport` e `import`, retención de pendientes y rechazados.
+- `src/lib/guard.ts`: fecha del último movimiento ajeno al add-on en una cuenta (evita solapes con CSV).
+- `src/lib/transfers.ts`: emparejado de traspasos sin IBAN.
+- `src/lib/balance.ts`: elección y comparación del saldo.
+- `scripts/package.mjs`: genera el ZIP sin depender de `zip` (funciona en Windows).
 - `src/components`, `src/pages`: interfaz.

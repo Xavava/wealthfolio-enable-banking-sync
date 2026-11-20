@@ -108,6 +108,19 @@ export function formatDate(iso?: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString('es-ES', { dateStyle: 'medium' });
 }
 
+export function formatMoney(value: number, currency: string, signed = false): string {
+  if (!Number.isFinite(value)) return '—';
+  try {
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency,
+      signDisplay: signed ? 'exceptZero' : 'auto',
+    }).format(value);
+  } catch {
+    return `${signed && value > 0 ? '+' : ''}${value.toFixed(2)} ${currency}`;
+  }
+}
+
 export function errorText(error: unknown): string {
   if (error instanceof Error) return error.message;
   return typeof error === 'string' ? error : 'Error desconocido';

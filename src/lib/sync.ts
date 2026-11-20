@@ -1,9 +1,14 @@
 import type { ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
+import { pickBalance } from './balance';
 import { EnableBankingClient, EnableBankingError } from './enable-banking-client';
-import { mapTransactions } from './mapping';
+import { firstSafeDate, latestForeignActivityDate } from './guard';
+import { mapTransactions, pendingDate } from './mapping';
 import {
   addDays,
+  formatIsoDate,
   isExpired,
+  minDate,
+  toDateOnly,
   toIsoDate,
   type AddonConfig,
   type BankConnection,
@@ -12,17 +17,26 @@ import {
   type SyncAccountResult,
   type SyncReport,
 } from './state';
+import { findOwnTransferPairs, type TransferCandidate } from './transfers';
 
 /** Days re-read before the last sync, to catch movements the bank books late. */
 export const OVERLAP_DAYS = 7;
 
-export type SyncHost = Pick<HostAPI, 'network' | 'secrets' | 'activities'>;
+/**
+ * How far back a held-back movement (pending or rejected) is retried. Banks
+ * rarely give more history to an unattended request, so older ones are dropped
+ * with a warning instead of anchoring every later sync.
+ */
+export const MAX_RETRY_DAYS = 89;
+
+export type SyncHost = Pick<HostAPI, 'network' | 'secrets' | 'activities' | 'accounts'>;
 
 export interface SyncOptions {
   host: SyncHost;
   config: AddonConfig;
   connections: BankConnection[];
   detectInterest?: boolean;
+  detectOwnTransfers?: boolean;
   now?: Date;
   onProgress?: (message: string) => void;
 }
@@ -32,10 +46,14 @@ export interface SyncOutcome {
   connections: BankConnection[];
 }
 
+/**
+ * First date to download: a week before the last sync, or earlier when a
+ * pending or rejected movement is waiting, but never before the chosen start.
+ */
 export function syncStartDate(account: LinkedAccount): string {
-  if (!account.lastSyncedDate) return account.syncFrom;
-  const withOverlap = addDays(account.lastSyncedDate, -OVERLAP_DAYS);
-  return withOverlap > account.syncFrom ? withOverlap : account.syncFrom;
+  let start = account.lastSyncedDate ? addDays(account.lastSyncedDate, -OVERLAP_DAYS) : account.syncFrom;
+  if (account.retryFrom && account.retryFrom < start) start = account.retryFrom;
+  return start > account.syncFrom ? start : account.syncFrom;
 }
 
 function errorMessage(error: unknown): string {
@@ -60,11 +78,24 @@ function isDuplicateRow(row: ActivityImport): boolean {
   return Boolean(row.duplicateOfId || row.errors?.[DUPLICATE_ERROR_FIELD]?.length);
 }
 
-interface PendingRows {
-  connectionIndex: number;
-  accountIndex: number;
+function isInvalidRow(row: ActivityImport): boolean {
+  return !row.isValid || rowErrors(row).length > 0;
+}
+
+interface AccountWork {
+  account: LinkedAccount;
   result: SyncAccountResult;
   rows: ActivityImport[];
+  /** Dates that must be read again next time (pending and rejected movements). */
+  holdDates: string[];
+  /** Rows that were new after validation and were sent to import. */
+  freshRows: number;
+}
+
+interface FreshRow {
+  row: ActivityImport;
+  original: ActivityImport;
+  work: AccountWork;
 }
 
 export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
@@ -74,6 +105,14 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   const startedAt = now.toISOString();
   const connections: BankConnection[] = structuredClone(options.connections);
   const client = new EnableBankingClient(host, config.applicationId);
+  const detectOwnTransfers = options.detectOwnTransfers ?? true;
+
+  const accountTypes = new Map<string, string>();
+  try {
+    for (const account of await host.accounts.getAll()) accountTypes.set(account.id, account.accountType);
+  } catch {
+    // Only used to recognise credit card accounts when pairing transfers.
+  }
 
   const syncedIbans = new Set(
     connections.flatMap((c) =>
@@ -82,12 +121,12 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   );
 
   const results: SyncAccountResult[] = [];
-  const pending: PendingRows[] = [];
+  const work: AccountWork[] = [];
 
-  // 1. Download booked movements for every mapped account.
-  for (const [connectionIndex, connection] of connections.entries()) {
+  // 1. Download booked movements (and the balance) of every mapped account.
+  for (const connection of connections) {
     const bank = connection.aspsp.name;
-    for (const [accountIndex, account] of connection.accounts.entries()) {
+    for (const account of connection.accounts) {
       if (!account.wealthfolioAccountId) continue;
       const result: SyncAccountResult = {
         bank,
@@ -97,6 +136,9 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         imported: 0,
         duplicates: 0,
         invalid: 0,
+        pending: 0,
+        ownTransfers: 0,
+        notes: [],
       };
       results.push(result);
 
@@ -108,7 +150,33 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
 
       const dateFrom = syncStartDate(account);
       result.dateFrom = dateFrom;
-      onProgress?.(`Descargando movimientos de ${bank} · ${account.name} desde ${dateFrom}…`);
+
+      // First sync into this Wealthfolio account: never overlap what is already there.
+      if (!account.lastSyncedDate) {
+        try {
+          const existing = await latestForeignActivityDate(host.activities, account.wealthfolioAccountId);
+          account.existingUntil = existing ?? undefined;
+          if (existing && existing >= dateFrom) {
+            result.status = 'blocked';
+            result.message =
+              `La cuenta de Wealthfolio ya tiene movimientos hasta el ${formatIsoDate(existing)} que no ` +
+              `importó este add-on (por ejemplo, de un CSV). Para no duplicarlos, cambia «Importar desde» ` +
+              `al ${formatIsoDate(firstSafeDate(existing))} o a una fecha posterior.`;
+            continue;
+          }
+        } catch (error) {
+          result.status = 'error';
+          result.message = `No se pudo comprobar qué movimientos hay ya en Wealthfolio: ${errorMessage(error)}`;
+          continue;
+        }
+      }
+
+      if (dateFrom > today) {
+        result.message = 'La fecha de inicio es posterior a hoy: todavía no hay nada que importar.';
+        continue;
+      }
+
+      onProgress?.(`Descargando movimientos de ${bank} · ${account.name} desde ${formatIsoDate(dateFrom)}…`);
       try {
         const transactions = await client.getAllTransactions(account.uid, dateFrom, today);
         result.fetched = transactions.length;
@@ -119,23 +187,33 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
           bankName: bank,
           detectInterest: options.detectInterest ?? true,
         });
-        const pendingCount = mapped.skipped.filter((s) => s.reason === 'pending').length;
-        if (pendingCount > 0) {
-          result.message = `${pendingCount} movimiento(s) pendiente(s) se importarán cuando el banco los contabilice.`;
-        }
-        pending.push({ connectionIndex, accountIndex, result, rows: mapped.rows });
+        const pending = mapped.skipped.filter((s) => s.reason === 'pending');
+        result.pending = pending.length;
+        const holdDates = pending.map((s) => pendingDate(s.tx) ?? dateFrom);
+        work.push({ account, result, rows: mapped.rows, holdDates, freshRows: 0 });
       } catch (error) {
         result.status =
           error instanceof EnableBankingError && error.needsReconnect ? 'reconnect' : 'error';
         result.message = errorMessage(error);
+        continue;
+      }
+
+      // The balance is informative: read it at most once a day (PSD2 caps unattended reads).
+      if (!account.bankBalance || toDateOnly(account.bankBalance.fetchedAt) !== today) {
+        try {
+          const balance = pickBalance(await client.getBalances(account.uid), now.toISOString());
+          if (balance) account.bankBalance = balance;
+        } catch (error) {
+          result.notes!.push(`No se pudo leer el saldo del banco: ${errorMessage(error)}`);
+        }
       }
     }
   }
 
-  // 2. Validate everything with Wealthfolio, then import only valid, new rows.
+  // 2. Validate everything with Wealthfolio and keep the valid, new rows.
   const allRows: ActivityImport[] = [];
-  const owners: PendingRows[] = [];
-  for (const entry of pending) {
+  const owners: AccountWork[] = [];
+  for (const entry of work) {
     for (const row of entry.rows) {
       allRows.push({ ...row, lineNumber: allRows.length + 1 });
       owners.push(entry);
@@ -143,53 +221,89 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   }
 
   const invalidRows: InvalidRowInfo[] = [];
+  const recordInvalid = (entry: AccountWork, original: ActivityImport, errors: string[]) => {
+    entry.result.invalid += 1;
+    const date = String(original.date ?? '').slice(0, 10);
+    if (date) entry.holdDates.push(date);
+    invalidRows.push({
+      account: `${entry.result.bank} · ${entry.result.account}`,
+      date,
+      amount: `${original.activityType} ${original.amount ?? ''} ${original.currency ?? ''}`.trim(),
+      comment: original.comment ?? '',
+      errors: errors.length > 0 ? errors : ['Fila no válida'],
+    });
+  };
+
   let importError: string | undefined;
   let importSucceeded = true;
+  let ownTransfers = 0;
 
   if (allRows.length > 0) {
     onProgress?.(`Validando ${allRows.length} movimiento(s) con Wealthfolio…`);
     const checked = await host.activities.checkImport(allRows);
-    const toImport: ActivityImport[] = [];
-    const importOwners: PendingRows[] = [];
+    const fresh: FreshRow[] = [];
 
     checked.forEach((row, index) => {
-      const ownerIndex = (row.lineNumber ?? index + 1) - 1;
-      const owner = owners[ownerIndex] ?? owners[index];
-      const errors = rowErrors(row);
-      if (!row.isValid || errors.length > 0) {
-        owner.result.invalid += 1;
-        const original = allRows[ownerIndex] ?? row;
-        invalidRows.push({
-          account: `${owner.result.bank} · ${owner.result.account}`,
-          date: String(original.date ?? ''),
-          amount: `${original.activityType} ${original.amount ?? ''} ${original.currency ?? ''}`.trim(),
-          comment: original.comment ?? '',
-          errors: errors.length > 0 ? errors : ['Fila no válida'],
-        });
-      } else if (isDuplicateRow(row)) {
-        owner.result.duplicates += 1;
-      } else {
-        toImport.push(row);
-        importOwners.push(owner);
-      }
+      const line = row.lineNumber ?? index + 1;
+      const owner = owners[line - 1] ?? owners[index];
+      const original = allRows[line - 1] ?? row;
+      if (isInvalidRow(row)) recordInvalid(owner, original, rowErrors(row));
+      else if (isDuplicateRow(row)) owner.result.duplicates += 1;
+      else fresh.push({ row, original, work: owner });
     });
 
-    if (toImport.length > 0) {
-      onProgress?.(`Importando ${toImport.length} movimiento(s) nuevo(s)…`);
+    // 2b. Withdrawal + deposit between two of your accounts without an IBAN → transfer.
+    if (detectOwnTransfers && fresh.length > 1) {
+      const candidates: TransferCandidate[] = fresh.map((f, key) => ({
+        key,
+        accountId: f.original.accountId,
+        activityType: f.original.activityType,
+        date: String(f.original.date ?? '').slice(0, 10),
+        amount: String(f.original.amount ?? ''),
+        currency: f.original.currency ?? '',
+        comment: f.original.comment,
+      }));
+      for (const [outKey, inKey] of findOwnTransferPairs(candidates, { accountTypes })) {
+        for (const [key, type] of [
+          [outKey, 'TRANSFER_OUT'],
+          [inKey, 'TRANSFER_IN'],
+        ] as const) {
+          const f = fresh[key];
+          f.row = {
+            ...f.row,
+            activityType: type,
+            isExternal: false,
+            metadata: { ...(f.row.metadata ?? f.original.metadata ?? {}), ownTransferMatch: 'amount-date' },
+          };
+          f.work.result.ownTransfers = (f.work.result.ownTransfers ?? 0) + 1;
+        }
+        ownTransfers += 1;
+      }
+    }
+
+    for (const f of fresh) f.work.freshRows += 1;
+
+    // 3. Import the new rows.
+    if (fresh.length > 0) {
+      onProgress?.(`Importando ${fresh.length} movimiento(s) nuevo(s)…`);
       try {
-        const result = await host.activities.import(toImport);
+        const result = await host.activities.import(fresh.map((f) => f.row));
         if (result.summary.success) {
-          const skippedIds = new Set(
-            result.activities.filter(isDuplicateRow).map((row) => row.sourceRecordId),
-          );
-          toImport.forEach((row, index) => {
-            const owner = importOwners[index];
-            if (skippedIds.has(row.sourceRecordId)) owner.result.duplicates += 1;
-            else owner.result.imported += 1;
+          const byLine = new Map<number, ActivityImport>();
+          for (const row of result.activities ?? []) {
+            if (row.lineNumber !== undefined) byLine.set(row.lineNumber, row);
+          }
+          fresh.forEach((f, index) => {
+            const outcome =
+              (f.row.lineNumber !== undefined ? byLine.get(f.row.lineNumber) : undefined) ??
+              result.activities?.[index];
+            if (outcome && isDuplicateRow(outcome)) f.work.result.duplicates += 1;
+            else if (outcome && isInvalidRow(outcome)) recordInvalid(f.work, f.original, rowErrors(outcome));
+            else f.work.result.imported += 1;
           });
         } else {
           importSucceeded = false;
-          const firstErrors = result.activities.flatMap(rowErrors).slice(0, 3);
+          const firstErrors = (result.activities ?? []).flatMap(rowErrors).slice(0, 3);
           importError =
             'Wealthfolio rechazó la importación' +
             (firstErrors.length ? `: ${firstErrors.join('; ')}` : '.');
@@ -201,17 +315,48 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
     }
   }
 
-  // 3. Advance the sync window only for accounts whose movements were stored.
-  for (const entry of pending) {
-    if (!importSucceeded && entry.rows.length > 0) {
-      entry.result.status = 'error';
-      entry.result.message = importError;
+  // 4. Advance the window only for accounts whose movements were stored, and keep
+  //    the date of anything held back so the next sync reads it again.
+  const oldestRetry = addDays(today, -MAX_RETRY_DAYS);
+  for (const entry of work) {
+    const { account, result } = entry;
+    if (!importSucceeded && entry.freshRows > 0) {
+      result.status = 'error';
+      result.message = importError;
       continue;
     }
-    const account = connections[entry.connectionIndex].accounts[entry.accountIndex];
     account.lastSyncedDate = today;
     account.lastSyncedAt = new Date().toISOString();
+
+    const hold = minDate(entry.holdDates);
+    if (!hold) {
+      delete account.retryFrom;
+    } else if (hold < oldestRetry) {
+      account.retryFrom = oldestRetry;
+      result.notes!.push(
+        `Hay movimientos pendientes o rechazados del ${formatIsoDate(hold)} que ya no se volverán a ` +
+          `consultar (más de ${MAX_RETRY_DAYS} días). Revísalos a mano.`,
+      );
+    } else {
+      account.retryFrom = hold;
+    }
+
+    if (result.pending) {
+      result.notes!.push(
+        `${result.pending} movimiento(s) pendiente(s): se importarán cuando el banco los contabilice.`,
+      );
+    }
+    if (result.invalid > 0) {
+      result.notes!.push(
+        `${result.invalid} movimiento(s) rechazado(s) por Wealthfolio: se volverán a intentar en la próxima sincronización.`,
+      );
+    }
+    if (result.ownTransfers) {
+      result.notes!.push(`${result.ownTransfers} movimiento(s) registrado(s) como traspaso entre tus cuentas.`);
+    }
   }
+
+  for (const result of results) if (result.notes?.length === 0) delete result.notes;
 
   const report: SyncReport = {
     startedAt,
@@ -219,6 +364,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
     imported: results.reduce((sum, r) => sum + r.imported, 0),
     duplicates: results.reduce((sum, r) => sum + r.duplicates, 0),
     invalid: results.reduce((sum, r) => sum + r.invalid, 0),
+    ownTransfers,
     accounts: results,
     invalidRows,
     importError,

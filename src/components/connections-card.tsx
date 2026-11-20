@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { Account } from '@wealthfolio/addon-sdk';
+import type { Account, AccountValuation } from '@wealthfolio/addon-sdk';
 import {
   Alert,
   AlertDescription,
@@ -14,17 +14,77 @@ import {
 } from '@wealthfolio/ui';
 import { RotateCcw, Unplug } from 'lucide-react';
 import { useState } from 'react';
+import { compareBalances, isBookedBalance } from '../lib/balance';
+import { firstSafeDate, latestForeignActivityDate } from '../lib/guard';
 import { maskIban } from '../lib/mapping';
-import { daysLeft, isExpired, type BankConnection, type LinkedAccount } from '../lib/state';
+import {
+  addDays,
+  daysLeft,
+  isExpired,
+  toIsoDate,
+  type BankConnection,
+  type LinkedAccount,
+} from '../lib/state';
 import {
   QK,
   useAddonCtx,
   useClient,
   useSaveConnections,
+  useValuations,
   useWealthfolioAccounts,
   type AddonState,
 } from '../hooks/use-addon-data';
-import { errorText, formatDate, formatDateTime, NativeSelect } from './ui-bits';
+import { errorText, formatDate, formatDateTime, formatMoney, NativeSelect } from './ui-bits';
+
+/** Many banks only give ~90 days of history to an unattended request. */
+const TYPICAL_HISTORY_DAYS = 90;
+
+function BalanceLine({ account, valuation }: { account: LinkedAccount; valuation?: AccountValuation }) {
+  const bank = account.bankBalance;
+  if (!bank || !account.wealthfolioAccountId) return null;
+  const check = compareBalances(
+    bank,
+    valuation ? { cashBalance: valuation.cashBalance, accountCurrency: valuation.accountCurrency } : undefined,
+  );
+  const bankDate = bank.referenceDate ?? bank.fetchedAt;
+
+  return (
+    <div className="bg-muted/40 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-3 py-2 text-xs">
+      <span>
+        Banco: <b className="tabular-nums">{formatMoney(Number(bank.amount), bank.currency)}</b>{' '}
+        <span className="text-muted-foreground">
+          ({bank.type}, {formatDate(bankDate)})
+        </span>
+      </span>
+      {valuation && (
+        <span>
+          Wealthfolio:{' '}
+          <b className="tabular-nums">{formatMoney(valuation.cashBalance, valuation.accountCurrency)}</b>{' '}
+          <span className="text-muted-foreground">({formatDate(valuation.valuationDate)})</span>
+        </span>
+      )}
+      {check.state === 'match' && <Badge variant="success-subtle">Cuadra</Badge>}
+      {check.state === 'match-inverted' && (
+        <Badge variant="success-subtle">Cuadra (el banco lo muestra con el signo contrario)</Badge>
+      )}
+      {check.state === 'mismatch' && (
+        <>
+          <Badge variant="warning-subtle">
+            Descuadre: {formatMoney(check.difference, bank.currency, true)}
+          </Badge>
+          <span className="text-muted-foreground w-full">
+            Puede faltar historial anterior a la fecha de inicio, haber movimientos pendientes o
+            rechazados, o Wealthfolio no haber terminado de recalcular.
+            {!isBookedBalance(bank) && ' El banco solo da saldo disponible, que puede incluir crédito o retenciones.'}
+          </span>
+        </>
+      )}
+      {check.state === 'unknown' && check.reason === 'currency' && (
+        <span className="text-muted-foreground">Divisas distintas: no se compara.</span>
+      )}
+    </div>
+  );
+}
 
 function ConsentBadge({ connection }: { connection: BankConnection }) {
   if (isExpired(connection)) return <Badge variant="destructive-subtle">Consentimiento caducado</Badge>;
@@ -48,12 +108,19 @@ function AccountRow({
   account,
   wfAccounts,
   duplicateTarget,
+  valuation,
+  checking,
   onChange,
+  onChooseTarget,
 }: {
   account: LinkedAccount;
   wfAccounts: Account[];
   duplicateTarget: boolean;
+  valuation?: AccountValuation;
+  /** True while looking up what is already in the chosen Wealthfolio account. */
+  checking: boolean;
   onChange: (patch: Partial<LinkedAccount>) => void;
+  onChooseTarget: (wealthfolioAccountId: string | null) => void;
 }) {
   const target = wfAccounts.find((a) => a.id === account.wealthfolioAccountId);
   const currencyMismatch = target && account.currency && target.currency !== account.currency;
@@ -61,9 +128,13 @@ function AccountRow({
     const score = (x: Account) => (x.currency === account.currency ? 0 : 1) + (x.accountType === 'SECURITIES' ? 1 : 0);
     return score(a) - score(b) || a.name.localeCompare(b.name, 'es');
   });
+  const today = toIsoDate(new Date());
+  const overlapsExisting = Boolean(account.existingUntil && account.syncFrom <= account.existingUntil);
+  const beyondTypicalHistory = account.syncFrom < addDays(today, -TYPICAL_HISTORY_DAYS);
 
   return (
-    <div className="grid gap-3 border-t py-3 first:border-t-0 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+    <div className="border-t py-3 first:border-t-0">
+    <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
       <div className="min-w-0">
         <div className="truncate font-medium">{account.name}</div>
         <div className="text-muted-foreground text-xs">
@@ -74,14 +145,8 @@ function AccountRow({
         <NativeSelect
           aria-label={`Cuenta de Wealthfolio para ${account.name}`}
           value={account.wealthfolioAccountId ?? ''}
-          onChange={(e) =>
-            onChange({
-              wealthfolioAccountId: e.target.value || null,
-              // A new destination starts its own history.
-              lastSyncedDate: undefined,
-              lastSyncedAt: undefined,
-            })
-          }
+          disabled={checking}
+          onChange={(e) => onChooseTarget(e.target.value || null)}
         >
           <option value="">No sincronizar</option>
           {sorted.map((wf) => (
@@ -101,12 +166,18 @@ function AccountRow({
           </p>
         )}
       </div>
-      <div className="space-y-1 sm:w-40">
+      <div className="space-y-1 sm:w-48">
         {account.lastSyncedAt ? (
           <div className="text-muted-foreground text-xs">
             Última sincronización:
             <br />
             {formatDateTime(account.lastSyncedAt)}
+            {account.retryFrom && (
+              <>
+                <br />
+                Se vuelve a revisar desde el {formatDate(account.retryFrom)}
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -114,14 +185,34 @@ function AccountRow({
               type="date"
               aria-label="Importar movimientos desde"
               value={account.syncFrom}
-              max={new Date().toISOString().slice(0, 10)}
+              max={account.syncFrom > today ? account.syncFrom : today}
               onChange={(e) => e.target.value && onChange({ syncFrom: e.target.value })}
-              disabled={!account.wealthfolioAccountId}
+              disabled={!account.wealthfolioAccountId || checking}
             />
-            <p className="text-muted-foreground text-xs">Importar desde</p>
+            <p className="text-muted-foreground text-xs">
+              {checking ? 'Comprobando movimientos existentes…' : 'Importar desde'}
+            </p>
+            {account.wealthfolioAccountId && account.existingUntil && (
+              <p
+                className={`text-xs ${overlapsExisting ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+              >
+                La cuenta ya tiene movimientos hasta el {formatDate(account.existingUntil)} (CSV u
+                otros). {overlapsExisting
+                  ? `Empieza el ${formatDate(firstSafeDate(account.existingUntil))} o después para no duplicarlos.`
+                  : 'Se importará a partir de ahí.'}
+              </p>
+            )}
+            {account.wealthfolioAccountId && beyondTypicalHistory && (
+              <p className="text-muted-foreground text-xs">
+                Muchos bancos solo dan {TYPICAL_HISTORY_DAYS} días de historial: comprueba después que
+                el saldo cuadra.
+              </p>
+            )}
           </>
         )}
       </div>
+    </div>
+    <BalanceLine account={account} valuation={valuation} />
     </div>
   );
 }
@@ -141,9 +232,15 @@ export function ConnectionsCard({
   const [error, setError] = useState<string | null>(null);
   // window.confirm() is blocked inside the add-on sandbox, so confirm inline.
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
 
   const usable = (wfAccounts.data ?? []).filter(
     (a) => a.isActive && !a.isArchived && a.trackingMode !== 'HOLDINGS',
+  );
+  const valuations = useValuations(
+    state.connections.flatMap((c) =>
+      c.accounts.filter((a) => a.wealthfolioAccountId && a.bankBalance).map((a) => a.wealthfolioAccountId!),
+    ),
   );
 
   const targetCounts = new Map<string, number>();
@@ -159,6 +256,38 @@ export function ConnectionsCard({
         : { ...c, accounts: c.accounts.map((a) => (a.key === key ? { ...a, ...patch } : a)) },
     );
     await saveConnections(next);
+  };
+
+  /**
+   * A new destination starts its own history. If the Wealthfolio account already
+   * has movements from elsewhere (a CSV, manual entries), start the day after the
+   * latest one: Wealthfolio would not recognise them as the same movements.
+   */
+  const chooseTarget = async (sessionId: string, account: LinkedAccount, wealthfolioAccountId: string | null) => {
+    setError(null);
+    const patch: Partial<LinkedAccount> = {
+      wealthfolioAccountId,
+      lastSyncedDate: undefined,
+      lastSyncedAt: undefined,
+      retryFrom: undefined,
+      existingUntil: undefined,
+    };
+    if (wealthfolioAccountId) {
+      setChecking(account.key);
+      try {
+        const existing = await latestForeignActivityDate(ctx.api.activities, wealthfolioAccountId);
+        if (existing) {
+          patch.existingUntil = existing;
+          const safe = firstSafeDate(existing);
+          if (account.syncFrom < safe) patch.syncFrom = safe;
+        }
+      } catch (e) {
+        setError(`No se pudo comprobar qué movimientos hay ya en esa cuenta: ${errorText(e)}`);
+      } finally {
+        setChecking(null);
+      }
+    }
+    await updateAccount(sessionId, account.key, patch);
   };
 
   const disconnect = async (connection: BankConnection) => {
@@ -233,7 +362,14 @@ export function ConnectionsCard({
                   Boolean(account.wealthfolioAccountId) &&
                   (targetCounts.get(account.wealthfolioAccountId!) ?? 0) > 1
                 }
+                valuation={
+                  account.wealthfolioAccountId
+                    ? valuations.data?.get(account.wealthfolioAccountId)
+                    : undefined
+                }
+                checking={checking === account.key}
                 onChange={(patch) => updateAccount(connection.sessionId, account.key, patch)}
+                onChooseTarget={(id) => chooseTarget(connection.sessionId, account, id)}
               />
             ))}
           </div>

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Account, AddonContext } from '@wealthfolio/addon-sdk';
-import { createContext, useContext } from 'react';
+import type { Account, AccountValuation, AddonContext } from '@wealthfolio/addon-sdk';
+import { createContext, useContext, useEffect } from 'react';
 import { EnableBankingClient, PRIVATE_KEY_SECRET } from '../lib/enable-banking-client';
 import type { EbApplication } from '../lib/eb-types';
 import { store, type AddonConfig, type BankConnection, type PendingAuthorization, type SyncReport } from '../lib/state';
@@ -19,6 +19,7 @@ export const QK = {
   aspsps: (applicationId: string, country: string) =>
     ['enable-banking-sync', 'aspsps', applicationId, country] as const,
   wfAccounts: ['enable-banking-sync', 'wealthfolio-accounts'] as const,
+  valuations: ['enable-banking-sync', 'valuations'] as const,
 };
 
 export interface AddonState {
@@ -75,6 +76,45 @@ export function useWealthfolioAccounts() {
     queryKey: QK.wfAccounts,
     queryFn: () => ctx.api.accounts.getAll(),
     staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Latest Wealthfolio valuation (cash balance) of the given accounts, refreshed
+ * whenever Wealthfolio finishes recalculating the portfolio after an import.
+ */
+export function useValuations(accountIds: string[]) {
+  const ctx = useAddonCtx();
+  const queryClient = useQueryClient();
+  const ids = [...new Set(accountIds)].sort();
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    ctx.api.events.portfolio
+      .onUpdateComplete(() => {
+        void queryClient.invalidateQueries({ queryKey: QK.valuations });
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [ctx, queryClient]);
+
+  return useQuery<Map<string, AccountValuation>>({
+    queryKey: [...QK.valuations, ids],
+    queryFn: async () => {
+      const list = await ctx.api.portfolio.getLatestValuations(ids);
+      return new Map(list.map((v) => [v.accountId, v]));
+    },
+    enabled: ids.length > 0,
+    staleTime: 30 * 1000,
+    retry: false,
   });
 }
 

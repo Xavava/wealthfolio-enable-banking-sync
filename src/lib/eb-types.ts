@@ -102,6 +102,20 @@ export interface EbTransactionsResponse {
   continuation_key?: string | null;
 }
 
+export interface EbBalance {
+  name?: string | null;
+  balance_amount: EbAmount;
+  /** ISO 20022 balance type: CLBD, ITBD, CLAV, ITAV, XPCD, OPBD… */
+  balance_type?: string | null;
+  last_change_date_time?: string | null;
+  reference_date?: string | null;
+  last_committed_transaction?: string | null;
+}
+
+export interface EbBalancesResponse {
+  balances: EbBalance[];
+}
+
 export interface EbErrorBody {
   code?: number;
   message?: string;
