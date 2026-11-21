@@ -1,4 +1,4 @@
-# Enable Banking Sync para Wealthfolio
+# Enable Banking Sync for Wealthfolio
 
 [English](README.md) · **Español**
 
@@ -75,7 +75,7 @@ Aparecerá **Bank sync** en la barra lateral.
 
 Si instalaste o actualizaste sin marcar la casilla, el add-on avisará de que «Wealthfolio no ha
 dejado salir la petición». Para arreglarlo: **Ajustes → Complementos**, pasa el ratón por
-*Enable Banking Sync*, pulsa el icono del **ojo** («Ver permisos»), marca
+*Enable Banking Sync for Wealthfolio*, pulsa el icono del **ojo** («Ver permisos»), marca
 `api.enablebanking.com` en **Hosts de red** y pulsa **Guardar**.
 
 ## 3. Configura y conecta tus bancos

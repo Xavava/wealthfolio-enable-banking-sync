@@ -1,6 +1,6 @@
 {
   "id": "enable-banking-sync",
-  "name": "Enable Banking Sync",
+  "name": "Enable Banking Sync for Wealthfolio",
   "version": "1.4.0",
   "description": "Sync your bank account transactions with one click through Enable Banking (PSD2)",
   "author": "Abel Marin",

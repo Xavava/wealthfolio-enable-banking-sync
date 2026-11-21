@@ -70,9 +70,9 @@ The permissions it asks for:
 **Bank sync** appears in the sidebar.
 
 If you installed or updated without ticking the box, the add-on says that "Wealthfolio did not
-let the request out". To fix it: **Settings → Add-ons**, hover over *Enable Banking Sync*, click
-the **eye** icon ("View permissions"), tick `api.enablebanking.com` under **Network hosts** and
-click **Save**.
+let the request out". To fix it: **Settings → Add-ons**, hover over *Enable Banking Sync for
+Wealthfolio*, click the **eye** icon ("View permissions"), tick `api.enablebanking.com` under
+**Network hosts** and click **Save**.
 
 ## 3. Set up and connect your banks
 

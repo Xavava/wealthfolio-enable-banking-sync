@@ -18,7 +18,7 @@ import { LocalizedError, msg, type Msg } from './messages';
 export const API_BASE_URL = 'https://api.enablebanking.com';
 
 /** Name shown in Wealthfolio's add-on list (manifest `name`), used in instructions. */
-export const ADDON_NAME = 'Enable Banking Sync';
+export const ADDON_NAME = 'Enable Banking Sync for Wealthfolio';
 
 /** Secret holding the application's private key (PEM). */
 export const PRIVATE_KEY_SECRET = 'private-key';

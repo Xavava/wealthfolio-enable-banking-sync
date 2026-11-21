@@ -13,6 +13,8 @@
 
 ### Changed
 
+- Nuevo nombre: «Enable Banking Sync for Wealthfolio», para que no parezca un add-on oficial de
+  Wealthfolio ni de Enable Banking. El identificador no cambia: se actualiza sin perder datos.
 - La descripción, la entrada de la barra lateral («Bank sync») y la explicación de los permisos
   del manifest están en inglés: Wealthfolio solo admite un idioma para ellos.
 - El aviso de que el banco no compartió ninguna cuenta explica que hay que vincular en Enable
