@@ -7,7 +7,7 @@ import {
   NetworkBlockedError,
   type TransactionsStrategy,
 } from './enable-banking-client';
-import { mapTransactions, pendingDate, transactionDate, type TransferLabels } from './mapping';
+import { mapTransactions, maskIban, pendingDate, transactionDate, type TransferLabels } from './mapping';
 import { errorToText, msg, type Text } from './messages';
 import {
   addDays,
@@ -128,10 +128,14 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   const detectOwnTransfers = options.detectOwnTransfers ?? true;
 
   const accountTypes = new Map<string, string>();
+  const accountNames = new Map<string, string>();
   try {
-    for (const account of await host.accounts.getAll()) accountTypes.set(account.id, account.accountType);
+    for (const account of await host.accounts.getAll()) {
+      accountTypes.set(account.id, account.accountType);
+      accountNames.set(account.id, account.name);
+    }
   } catch {
-    // Only used to recognise credit card accounts when pairing transfers.
+    // Types pair credit card transfers and names label the report: both optional.
   }
 
   const syncedIbans = new Set(
@@ -149,9 +153,14 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
     const bank = connection.aspsp.name;
     for (const account of connection.accounts) {
       if (!account.wealthfolioAccountId) continue;
+      // Banks often name every account after its holder, so the report shows the
+      // Wealthfolio account and the masked IBAN to tell them apart.
+      const wealthfolioAccount = accountNames.get(account.wealthfolioAccountId);
       const result: SyncAccountResult = {
         bank,
         account: account.name,
+        wealthfolioAccount,
+        iban: account.iban ? maskIban(account.iban) : undefined,
         status: 'ok',
         fetched: 0,
         imported: 0,
@@ -199,7 +208,9 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       }
 
       const strategy = fetchStrategy(account, dateFrom, today);
-      onProgress?.(msg('sync.progressDownload', { bank, account: account.name, fromDate: dateFrom }));
+      onProgress?.(
+        msg('sync.progressDownload', { bank, account: wealthfolioAccount ?? account.name, fromDate: dateFrom }),
+      );
       let keepWindow = false;
       try {
         const transactions = await client.getAllTransactions(account.uid, dateFrom, today, { strategy });
@@ -271,7 +282,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
     const date = String(original.date ?? '').slice(0, 10);
     if (date) entry.holdDates.push(date);
     invalidRows.push({
-      account: `${entry.result.bank} · ${entry.result.account}`,
+      account: `${entry.result.bank} · ${entry.result.wealthfolioAccount ?? entry.result.account}`,
       date,
       amount: `${original.activityType} ${original.amount ?? ''} ${original.currency ?? ''}`.trim(),
       comment: original.comment ?? '',

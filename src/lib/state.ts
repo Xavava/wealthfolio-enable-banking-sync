@@ -96,7 +96,12 @@ export type SyncStatus = 'ok' | 'error' | 'reconnect' | 'blocked';
 
 export interface SyncAccountResult {
   bank: string;
+  /** Account name as the bank gives it (often just the holder's name). */
   account: string;
+  /** Name of the Wealthfolio account it syncs into (reports from 1.5.0 on). */
+  wealthfolioAccount?: string;
+  /** Masked IBAN of the bank account, e.g. "ES60 •••• 1026" (reports from 1.5.0 on). */
+  iban?: string;
   status: SyncStatus;
   fetched: number;
   imported: number;

@@ -21,6 +21,25 @@ beforeEach(() => {
 });
 
 describe('end-to-end sync against a fake Enable Banking API', () => {
+  it('labels each report row with its Wealthfolio account and masked IBAN', async () => {
+    const { connections: connected } = await connect(h.host);
+    const progress: string[] = [];
+    const { report } = await runSync({
+      host: h.host,
+      config,
+      connections: mapAll(connected),
+      now: new Date('2026-11-20T10:00:00'),
+      onProgress: (text) => progress.push(textEs(text)),
+    });
+    expect(report.accounts.map((a) => [a.wealthfolioAccount, a.iban, a.account])).toEqual([
+      ['wf-checking', 'ES91 •••• 1332', 'Cuenta Nómina'],
+      ['wf-savings', 'ES79 •••• 6789', 'Cuenta Ahorro'],
+    ]);
+    expect(progress.some((p) => p.includes('Banco Test · wf-checking'))).toBe(true);
+    // The full IBAN never goes into the stored report.
+    expect(JSON.stringify(report)).not.toContain(IBAN_CHECKING);
+  });
+
   it('connects, imports new movements once and skips them on the next sync', async () => {
     const { connections: connected } = await connect(h.host);
     expect(connected[0].accounts.map((a) => [a.uid, a.iban])).toEqual([

@@ -65,8 +65,10 @@ function ReportView({ report }: { report: SyncReport }) {
               {report.accounts.map((row, index) => (
                 <tr key={index} className="border-t align-top">
                   <td className="px-3 py-2">
-                    <div className="font-medium">{row.account}</div>
-                    <div className="text-muted-foreground text-xs">{row.bank}</div>
+                    <div className="font-medium">{row.wealthfolioAccount ?? row.account}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {row.wealthfolioAccount ? [row.bank, row.iban ?? row.account].join(' · ') : row.bank}
+                    </div>
                     {row.message && (
                       <div
                         className={`mt-1 max-w-md text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}

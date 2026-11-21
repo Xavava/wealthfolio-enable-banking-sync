@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.0] - 2026-11-21
+
+### Changed
+
+- El informe de sincronización identifica cada fila por su cuenta de Wealthfolio, con el banco y
+  el IBAN abreviado debajo (por ejemplo «Cuenta 1 - Operativa» / «BBVA · ES60 •••• 1026»), en
+  lugar del nombre que da el banco, que suele ser el del titular y se repite en todas. Los
+  mensajes de progreso y la lista de movimientos rechazados usan también la cuenta de Wealthfolio.
+  El informe guardado antes se sigue viendo como antes hasta la siguiente sincronización.
+
 ## [1.4.0] - 2026-11-21
 
 ### Added
