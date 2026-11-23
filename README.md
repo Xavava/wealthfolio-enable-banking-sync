@@ -49,7 +49,7 @@ must create **their own** application: its terms do not allow giving access to o
 
 ## 2. Install the add-on
 
-Download `wealthfolio-enable-banking-sync-addon-1.5.0.zip` from the *Releases* page. In
+Download `wealthfolio-enable-banking-sync-addon-1.5.1.zip` from the *Releases* page. In
 Wealthfolio, go to **Settings → Add-ons**, press **Install from file** and select the zip.
 
 > **Important:** in the permissions dialog, under **Network hosts**, tick

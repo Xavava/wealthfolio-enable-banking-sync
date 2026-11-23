@@ -51,7 +51,7 @@ persona tiene que crear **su propia** aplicación: sus condiciones no permiten d
 
 ## 2. Instala el add-on
 
-Descarga `wealthfolio-enable-banking-sync-addon-1.5.0.zip` de la página de versiones
+Descarga `wealthfolio-enable-banking-sync-addon-1.5.1.zip` de la página de versiones
 (*Releases*). En Wealthfolio, ve a **Ajustes → Complementos**, pulsa **Instalar desde archivo**
 y selecciona el zip.
 

@@ -71,13 +71,13 @@ function ReportView({ report }: { report: SyncReport }) {
                     </div>
                     {row.message && (
                       <div
-                        className={`mt-1 max-w-md text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
+                        className={`mt-1 text-xs ${row.status === 'ok' ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-400'}`}
                       >
                         {render(row.message)}
                       </div>
                     )}
                     {row.notes?.map((note: Text, i) => (
-                      <div key={i} className="text-muted-foreground mt-1 max-w-md text-xs">
+                      <div key={i} className="text-muted-foreground mt-1 text-xs">
                         {render(note)}
                       </div>
                     ))}

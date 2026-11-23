@@ -19,7 +19,7 @@ export function SyncPage() {
         text={t('page.text')}
       />
       <PageContent>
-        <div className="mx-auto max-w-4xl space-y-6 pb-10">
+        <div className="space-y-6 pb-10">
           {isLoading && <Skeleton className="h-40 w-full" />}
           {error && (
             <Alert variant="destructive">

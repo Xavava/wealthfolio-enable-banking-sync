@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.1] - 2026-11-23
+
+### Changed
+
+- La página ocupa todo el ancho de la ventana, como las de Wealthfolio, en lugar de quedarse en
+  unos 900 píxeles centrados. La tabla del informe cabe entera y los mensajes de cada cuenta usan
+  el ancho de su columna.
+- Los errores de Enable Banking muestran su mensaje una sola vez: la API lo repite dentro del
+  detalle y antes salía dos veces.
+
 ## [1.5.0] - 2026-11-21
 
 ### Changed

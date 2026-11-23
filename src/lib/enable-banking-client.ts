@@ -92,15 +92,31 @@ export class EnableBankingError extends Error {
   }
 }
 
-function describeError(status: number, body: EbErrorBody | undefined, raw: string): EnableBankingError {
+/**
+ * Extra detail of an API error, or '' when it only repeats the message: Enable
+ * Banking often sends the same text again inside `detail` (as an object or as
+ * its JSON).
+ */
+function errorDetail(detail: unknown, message: string): string {
+  if (detail === undefined || detail === null || detail === '') return '';
+  let value = detail;
+  if (typeof value === 'string') {
+    if (value.trim() === message.trim()) return '';
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return detail as string;
+    }
+  }
+  const inner = value && typeof value === 'object' ? (value as { message?: unknown }).message : undefined;
+  if (typeof inner === 'string' && inner.trim() === message.trim()) return '';
+  return typeof detail === 'string' ? detail : JSON.stringify(detail);
+}
+
+export function describeError(status: number, body: EbErrorBody | undefined, raw: string): EnableBankingError {
   const code = body?.error;
-  const detail =
-    typeof body?.detail === 'string'
-      ? body.detail
-      : body?.detail
-        ? JSON.stringify(body.detail)
-        : '';
   const base = body?.message || raw.slice(0, 300) || `HTTP ${status}`;
+  const detail = errorDetail(body?.detail, base);
   const message = [base, detail].filter(Boolean).join(' — ') + (code ? ` [${code}]` : '');
   let advice: Msg | undefined;
   if (status === 401) {
