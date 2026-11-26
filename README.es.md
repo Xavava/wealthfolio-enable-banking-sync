@@ -181,12 +181,19 @@ prepago), hazlo en una cuenta de Wealthfolio distinta de las que sincroniza el a
 
 ## Comprobación de saldo
 
-En cada sincronización se lee el saldo de cada cuenta (como mucho una vez al día, por el
-límite de consultas PSD2), prefiriendo el saldo contabilizado. En *Sincronización* verás el
-saldo del banco junto al de Wealthfolio y si **cuadran**. Un descuadre suele indicar historial
-anterior a la fecha de inicio que falta, movimientos pendientes o rechazados, o que Wealthfolio
-aún no ha terminado de recalcular. En tarjetas de crédito el banco puede dar la deuda en
-positivo; se indica como «cuadra con el signo contrario».
+La primera sincronización del día lee el saldo de cada cuenta, después de bajar los
+movimientos, prefiriendo el saldo contabilizado. Las siguientes no lo vuelven a pedir, por el
+límite de consultas PSD2. En *Sincronización* verás el saldo del banco junto al de Wealthfolio
+y si **cuadran**. Un descuadre suele indicar historial anterior a la fecha de inicio que falta,
+movimientos pendientes o rechazados, o que Wealthfolio aún no ha terminado de recalcular. En
+tarjetas de crédito el banco puede dar la deuda en positivo; se indica como «cuadra con el signo
+contrario».
+
+Si una sincronización posterior importa movimientos en una cuenta, su saldo del banco ya no los
+incluye. Entonces, en vez de un descuadre, verás «Saldo del banco anterior a los últimos
+movimientos», y junto a *Sincronizar ahora* aparece **Actualizar saldos**: vuelve a leer el saldo
+solo de esas cuentas, una consulta por cuenta. Si no lo pulsas, se lee en la primera
+sincronización del día siguiente.
 
 El saldo que compara es el **contabilizado**, no el *disponible* que muestra la app del banco:
 la diferencia entre los dos son las retenciones (pagos con tarjeta aún sin liquidar).

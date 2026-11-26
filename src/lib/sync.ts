@@ -4,6 +4,7 @@ import type { EbTransaction } from './eb-types';
 import {
   EnableBankingClient,
   EnableBankingError,
+  type EnableBankingHost,
   NetworkBlockedError,
   type TransactionsStrategy,
 } from './enable-banking-client';
@@ -132,6 +133,17 @@ interface AccountWork {
   pending: Record<string, PendingNote>;
   /** Pending payments read again and already in Wealthfolio → their row now and activity. */
   seen: Map<string, { comment: string; activityId?: string }>;
+  /** The balance was read in this sync, after downloading the movements. */
+  balanceRead: boolean;
+}
+
+/** Reads the account's balance and stores it. False when the bank gave none usable. */
+async function readBalance(client: EnableBankingClient, account: LinkedAccount, now: Date): Promise<boolean> {
+  const balance = pickBalance(await client.getBalances(account.uid), now.toISOString());
+  if (!balance) return false;
+  account.bankBalance = balance;
+  delete account.balanceOutdated;
+  return true;
 }
 
 /** The saved list, with only the fields this version keeps (1.7.0 also saved a wrong activity id). */
@@ -361,7 +373,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         const pending = mapped.skipped.filter((s) => s.reason === 'pending');
         result.pending = pending.length;
         const holdDates = pending.map((s) => pendingDate(s.tx) ?? dateFrom);
-        work.push({
+        const entry: AccountWork = {
           account,
           result,
           rows: mapped.rows,
@@ -372,23 +384,26 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
           // A new start (another Wealthfolio account) starts without pending notes.
           pending: account.lastSyncedDate ? keptNotes(account.pendingNotes) : {},
           seen: new Map(),
-        });
+          balanceRead: false,
+        };
+        work.push(entry);
+
+        // The balance is informative: read it on the first sync of the day (PSD2 caps
+        // unattended reads). Later syncs that import movements mark it as out of date,
+        // and the user decides whether to spend a read on it.
+        if (!account.bankBalance || toDateOnly(account.bankBalance.fetchedAt) !== today) {
+          try {
+            entry.balanceRead = await readBalance(client, account, now);
+          } catch (error) {
+            result.notes!.push(msg('sync.balanceFailed', { detail: errorToText(error) }));
+          }
+        }
       } catch (error) {
         if (error instanceof NetworkBlockedError) networkBlocked = true;
         result.status =
           error instanceof EnableBankingError && error.needsReconnect ? 'reconnect' : 'error';
         result.message = errorToText(error);
         continue;
-      }
-
-      // The balance is informative: read it at most once a day (PSD2 caps unattended reads).
-      if (!account.bankBalance || toDateOnly(account.bankBalance.fetchedAt) !== today) {
-        try {
-          const balance = pickBalance(await client.getBalances(account.uid), now.toISOString());
-          if (balance) account.bankBalance = balance;
-        } catch (error) {
-          result.notes!.push(msg('sync.balanceFailed', { detail: errorToText(error) }));
-        }
       }
     }
   }
@@ -533,6 +548,8 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   const oldestRetry = addDays(today, -MAX_RETRY_DAYS);
   for (const entry of work) {
     const { account, result } = entry;
+    // Movements imported after the bank gave its balance: the balance no longer includes them.
+    if (result.imported > 0 && !entry.balanceRead && account.bankBalance) account.balanceOutdated = true;
     if (!importSucceeded && (entry.freshRows > 0 || (validationFailed && entry.rows.length > 0))) {
       result.status = 'error';
       result.message = importError;
@@ -585,4 +602,50 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
     importError,
   };
   return { report, connections };
+}
+
+export interface BalanceRefreshOutcome {
+  connections: BankConnection[];
+  /** Accounts whose balance was read. */
+  updated: number;
+  /** Accounts whose balance could not be read, by key. */
+  failures: { key: string; error: Text }[];
+}
+
+/**
+ * Reads again, one request each, the balance of the given accounts: those where a
+ * sync imported movements after the bank gave the balance. Nothing else changes.
+ */
+export async function refreshBalances(options: {
+  host: EnableBankingHost;
+  config: AddonConfig;
+  connections: BankConnection[];
+  keys: readonly string[];
+  now?: Date;
+}): Promise<BalanceRefreshOutcome> {
+  const now = options.now ?? new Date();
+  const connections: BankConnection[] = structuredClone(options.connections);
+  const client = new EnableBankingClient(options.host, options.config.applicationId);
+  const wanted = new Set(options.keys);
+  const failures: { key: string; error: Text }[] = [];
+  let updated = 0;
+
+  banks: for (const connection of connections) {
+    for (const account of connection.accounts) {
+      if (!wanted.has(account.key) || !account.wealthfolioAccountId) continue;
+      if (isExpired(connection, now)) {
+        failures.push({ key: account.key, error: msg('sync.consentExpired') });
+        continue;
+      }
+      try {
+        if (await readBalance(client, account, now)) updated += 1;
+        else failures.push({ key: account.key, error: msg('sync.balanceMissing') });
+      } catch (error) {
+        failures.push({ key: account.key, error: errorToText(error) });
+        // Once Wealthfolio refuses one request it refuses them all.
+        if (error instanceof NetworkBlockedError) break banks;
+      }
+    }
+  }
+  return { connections, updated, failures };
 }

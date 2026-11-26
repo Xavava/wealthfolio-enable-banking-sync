@@ -100,6 +100,7 @@ export const en: Translations = {
     balanceMatch: 'Matches',
     balanceMatchInverted: 'Matches (the bank shows it with the opposite sign)',
     balanceMismatch: 'Difference: {{difference}}',
+    balanceOutdated: 'Bank balance older than the latest transactions',
     balanceMismatchHelp:
       'There may be transactions duplicated with a CSV (overlapping start date), missing history before the start date, pending or rejected transactions, or Wealthfolio may not have finished recalculating.',
     balanceAvailableOnly: 'The bank only gives the available balance, which may include credit or holds.',
@@ -110,6 +111,8 @@ export const en: Translations = {
     title: 'Sync',
     syncNow: 'Sync now',
     syncing: 'Syncing…',
+    refreshBalances: 'Update balances',
+    refreshingBalances: 'Updating balances…',
     preparing: 'Preparing…',
     noMapped: 'Connect a bank and assign at least one of its accounts to a Wealthfolio account to be able to sync.',
     failedTitle: 'Sync failed',
@@ -137,6 +140,8 @@ export const en: Translations = {
     toastIssues: 'Sync finished with issues: {{n}} new transaction(s)',
     toastImported: '{{n}} new transaction(s) imported',
     toastUpToDate: 'All up to date: no new transactions',
+    toastBalancesUpdated: '{{n}} balance(s) updated',
+    toastBalanceFailed: 'Could not read the balance of {{account}}: {{detail}}',
     optionInterest: 'Record incoming payments whose description contains "interest" (or "intereses") as Interest',
     optionTransfers:
       'Record a debit and a credit of the same amount between two of your synced accounts (up to 3 days apart) as a transfer when one of them is a credit card account or the description says "traspaso", "recarga" or "pago tarjeta" (Spanish bank wording)',
@@ -159,6 +164,7 @@ export const en: Translations = {
       'The bank gave transactions from {{earliestDate}} (you asked from {{fromDate}}). If there were transactions in between, the bank does not keep more history: check it against the balance.',
     historyFull: 'The bank gave all the history requested, from {{earliestDate}}.',
     balanceFailed: 'Could not read the bank balance: {{detail}}',
+    balanceMissing: 'The bank gave no balance.',
     invalidRow: 'Invalid row',
     validateFailed: 'Wealthfolio could not validate the transactions: {{detail}}',
     importRejected: 'Wealthfolio rejected the import.',

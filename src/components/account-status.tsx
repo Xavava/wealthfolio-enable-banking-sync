@@ -1,16 +1,17 @@
 import type { AccountValuation } from '@wealthfolio/addon-sdk';
 import { Badge } from '@wealthfolio/ui';
 import { useText } from '../i18n';
-import { compareBalances, isBookedBalance } from '../lib/balance';
+import { compareBalances, isBookedBalance, withOutdated, type AccountBalanceCheck } from '../lib/balance';
 import type { LinkedAccount } from '../lib/state';
 
 /** Bank balance against Wealthfolio's, or null when the bank gave none yet. */
-export function balanceCheck(account: LinkedAccount, valuation?: AccountValuation) {
+export function balanceCheck(account: LinkedAccount, valuation?: AccountValuation): AccountBalanceCheck | null {
   if (!account.bankBalance || !account.wealthfolioAccountId) return null;
-  return compareBalances(
+  const check = compareBalances(
     account.bankBalance,
     valuation ? { cashBalance: valuation.cashBalance, accountCurrency: valuation.accountCurrency } : undefined,
   );
+  return withOutdated(check, account.balanceOutdated);
 }
 
 export function BalanceLine({ account, valuation }: { account: LinkedAccount; valuation?: AccountValuation }) {
@@ -50,6 +51,7 @@ export function BalanceLine({ account, valuation }: { account: LinkedAccount; va
           </span>
         </>
       )}
+      {check.state === 'outdated' && <Badge variant="secondary">{t('connections.balanceOutdated')}</Badge>}
       {check.state === 'unknown' && check.reason === 'currency' && (
         <span className="text-muted-foreground">{t('connections.balanceCurrencies')}</span>
       )}

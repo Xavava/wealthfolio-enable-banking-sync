@@ -56,8 +56,16 @@ export interface LinkedAccount {
    * sync: the add-on cannot see what is already in the account (e.g. from a CSV).
    */
   syncFromConfirmed?: boolean;
-  /** Last balance reported by the bank (fetched at most once a day). */
+  /**
+   * Last balance reported by the bank: read on the first sync of the day, or when
+   * the user updates the balances that are out of date.
+   */
   bankBalance?: BankBalance;
+  /**
+   * A sync imported movements after `bankBalance` was read, so a difference with
+   * Wealthfolio is expected until it is read again. Absent otherwise.
+   */
+  balanceOutdated?: boolean;
   /**
    * What the bank gave the last time the add-on asked for the longest history it
    * keeps: the date asked for and the earliest movement returned (absent when it

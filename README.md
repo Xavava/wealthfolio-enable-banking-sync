@@ -174,12 +174,18 @@ do it in a Wealthfolio account other than those the add-on syncs.
 
 ## Balance check
 
-Every sync reads each account's balance (at most once a day, because of the PSD2 request limit),
-preferring the booked balance. The *Sync* card shows the bank's balance next to Wealthfolio's
-and whether they **match**. A difference usually means missing history before the start date,
-pending or rejected transactions, or that Wealthfolio has not finished recalculating. For credit
-cards the bank may report the debt as positive; this shows as "matches (the bank shows it with
-the opposite sign)".
+The first sync of the day reads each account's balance, after downloading the transactions,
+preferring the booked balance. Later syncs do not ask for it again, because of the PSD2 request
+limit. The *Sync* card shows the bank's balance next to Wealthfolio's and whether they **match**.
+A difference usually means missing history before the start date, pending or rejected
+transactions, or that Wealthfolio has not finished recalculating. For credit cards the bank may
+report the debt as positive; this shows as "matches (the bank shows it with the opposite sign)".
+
+If a later sync imports transactions into an account, its bank balance no longer includes them.
+Instead of a difference you then see "Bank balance older than the latest transactions", and
+**Update balances** appears next to *Sync now*: it reads the balance again for those accounts
+only, one request per account. If you do not press it, the balance is read on the next day's
+first sync.
 
 The balance compared is the **booked** one, not the *available* balance your bank's app shows:
 the difference between them is holds (card payments not settled yet).

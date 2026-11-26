@@ -103,6 +103,7 @@ export const es = {
     balanceMatch: 'Cuadra',
     balanceMatchInverted: 'Cuadra (el banco lo muestra con el signo contrario)',
     balanceMismatch: 'Descuadre: {{difference}}',
+    balanceOutdated: 'Saldo del banco anterior a los últimos movimientos',
     balanceMismatchHelp:
       'Puede haber movimientos duplicados con un CSV (fecha de inicio solapada), faltar historial anterior a la fecha de inicio, haber movimientos pendientes o rechazados, o Wealthfolio no haber terminado de recalcular.',
     balanceAvailableOnly: 'El banco solo da saldo disponible, que puede incluir crédito o retenciones.',
@@ -113,6 +114,8 @@ export const es = {
     title: 'Sincronización',
     syncNow: 'Sincronizar ahora',
     syncing: 'Sincronizando…',
+    refreshBalances: 'Actualizar saldos',
+    refreshingBalances: 'Actualizando saldos…',
     preparing: 'Preparando…',
     noMapped:
       'Conecta un banco y asigna al menos una de sus cuentas a una cuenta de Wealthfolio para poder sincronizar.',
@@ -141,6 +144,8 @@ export const es = {
     toastIssues: 'Sincronización con incidencias: {{n}} movimiento(s) nuevo(s)',
     toastImported: '{{n}} movimiento(s) nuevo(s) importado(s)',
     toastUpToDate: 'Todo al día: no hay movimientos nuevos',
+    toastBalancesUpdated: '{{n}} saldo(s) actualizado(s)',
+    toastBalanceFailed: 'No se pudo leer el saldo de {{account}}: {{detail}}',
     optionInterest: 'Registrar como «Intereses» los ingresos cuyo concepto contenga «intereses»',
     optionTransfers:
       'Registrar como traspaso un cargo y un abono del mismo importe entre dos de tus cuentas sincronizadas (hasta 3 días de diferencia) cuando una es de tarjeta o el concepto dice «traspaso», «recarga» o «pago tarjeta»',
@@ -163,6 +168,7 @@ export const es = {
       'El banco ha dado movimientos desde el {{earliestDate}} (pediste desde el {{fromDate}}). Si en ese intervalo hubo movimientos, el banco no guarda más historial: compruébalo con el saldo.',
     historyFull: 'El banco ha dado todo el historial pedido, desde el {{earliestDate}}.',
     balanceFailed: 'No se pudo leer el saldo del banco: {{detail}}',
+    balanceMissing: 'El banco no ha dado ningún saldo.',
     invalidRow: 'Fila no válida',
     validateFailed: 'Wealthfolio no pudo validar los movimientos: {{detail}}',
     importRejected: 'Wealthfolio rechazó la importación.',

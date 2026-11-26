@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { QueryKeys, type AccountValuation } from '@wealthfolio/addon-sdk';
 import { Alert, AlertDescription, AlertTitle, Badge, Button } from '@wealthfolio/ui';
-import { LoaderCircle, RefreshCw } from 'lucide-react';
+import { LoaderCircle, RefreshCw, Scale } from 'lucide-react';
 import { useState } from 'react';
 import { useText } from '../i18n';
 import { maskIban } from '../lib/mapping';
@@ -15,7 +15,7 @@ import {
   type SyncReport,
   type SyncStatus,
 } from '../lib/state';
-import { runSync } from '../lib/sync';
+import { refreshBalances, runSync } from '../lib/sync';
 import {
   QK,
   useAddonCtx,
@@ -179,6 +179,7 @@ export function SyncCard({ state }: { state: AddonState }) {
   const saveConnections = useSaveConnections();
   const wfAccounts = useWealthfolioAccounts();
   const [running, setRunning] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [runs, setRuns] = useState(0);
   const [progress, setProgress] = useState<Text>('');
   const [error, setError] = useState<string | null>(null);
@@ -195,16 +196,52 @@ export function SyncCard({ state }: { state: AddonState }) {
   const detectInterest = state.config.detectInterest ?? true;
   const detectOwnTransfers = state.config.detectOwnTransfers ?? true;
 
+  const checks = synced.map((s) => ({
+    account: s.account,
+    check: balanceCheck(s.account, valuations.data?.get(s.account.wealthfolioAccountId!)),
+  }));
   // Accounts with an error in the last sync or whose balance does not match.
   const toCheck =
     (report?.accounts.filter((row) => row.status !== 'ok').length ?? 0) +
-    synced.filter(
-      (s) => balanceCheck(s.account, valuations.data?.get(s.account.wealthfolioAccountId!))?.state === 'mismatch',
-    ).length;
+    checks.filter((c) => c.check?.state === 'mismatch').length;
   const attention = Boolean(report?.importError) || toCheck > 0;
+  // Differences that come from movements imported after the bank gave its balance.
+  const outdated = checks.filter((c) => c.check?.state === 'outdated').map((c) => c.account);
+  const busy = running || refreshing;
+
+  const refresh = async () => {
+    if (busy || outdated.length === 0) return;
+    setRefreshing(true);
+    try {
+      const { connections, updated, failures } = await refreshBalances({
+        host: ctx.api,
+        config: state.config,
+        connections: state.connections,
+        keys: outdated.map((a) => a.key),
+      });
+      await saveConnections(connections);
+      await queryClient.invalidateQueries({ queryKey: QK.state });
+      await queryClient.invalidateQueries({ queryKey: QK.valuations });
+      const label = (key: string) => {
+        const account = outdated.find((a) => a.key === key);
+        return account ? (names.get(account.wealthfolioAccountId!) ?? account.name) : key;
+      };
+      for (const failure of failures) {
+        const text = t('syncCard.toastBalanceFailed', { account: label(failure.key), detail: render(failure.error) });
+        ctx.api.toast.error(text);
+        ctx.api.logger.error(text);
+      }
+      if (updated > 0) ctx.api.toast.success(t('syncCard.toastBalancesUpdated', { n: updated }));
+    } catch (e) {
+      ctx.api.toast.error(errorText(e));
+      ctx.api.logger.error(`Balance update failed: ${errorText(e)}`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const sync = async () => {
-    if (running) return;
+    if (busy) return;
     setRuns((n) => n + 1); // always show the result of a sync
     setRunning(true);
     setError(null);
@@ -262,10 +299,18 @@ export function SyncCard({ state }: { state: AddonState }) {
       }
       summary={report ? t('syncCard.collapsedSummary', { when: formatWhen(report.finishedAt), n: report.imported }) : undefined}
       actions={
-        <Button size="lg" onClick={sync} disabled={running || synced.length === 0}>
-          {running ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-          {running ? t('syncCard.syncing') : t('syncCard.syncNow')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {(outdated.length > 0 || refreshing) && (
+            <Button size="lg" variant="outline" onClick={refresh} disabled={busy}>
+              {refreshing ? <LoaderCircle className="size-4 animate-spin" /> : <Scale className="size-4" />}
+              {refreshing ? t('syncCard.refreshingBalances') : t('syncCard.refreshBalances')}
+            </Button>
+          )}
+          <Button size="lg" onClick={sync} disabled={busy || synced.length === 0}>
+            {running ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            {running ? t('syncCard.syncing') : t('syncCard.syncNow')}
+          </Button>
+        </div>
       }
       contentClassName="space-y-4"
     >

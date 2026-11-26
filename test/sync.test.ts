@@ -2,7 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EnableBankingClient, NetworkBlockedError, PRIVATE_KEY_SECRET } from '../src/lib/enable-banking-client';
 import { mapTransactions } from '../src/lib/mapping';
-import { NAME_WAIT_DAYS, runSync } from '../src/lib/sync';
+import { NAME_WAIT_DAYS, refreshBalances, runSync } from '../src/lib/sync';
 import {
   APP_ID,
   IBAN_CHECKING,
@@ -445,6 +445,69 @@ describe('bank balance', () => {
     expect(report.accounts[0].imported).toBe(3);
     expect(report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/No se pudo leer el saldo/);
     expect(connections[0].accounts[0].bankBalance).toBeUndefined();
+  });
+
+  it('marks the balance as out of date when a later sync of the day imports movements', async () => {
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    // Read after downloading the movements: it already includes them.
+    expect(first.connections[0].accounts.map((a) => a.balanceOutdated)).toEqual([undefined, undefined]);
+
+    h.bank.transactions.checking.push(
+      book({ entry_reference: 'C5', booking_date: '2026-11-20', creditor: { name: 'FARMACIA' } }),
+    );
+    h.bank.requests = [];
+    const second = await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-20T18:00:00') });
+    expect(second.report.accounts.map((a) => a.imported)).toEqual([1, 0]);
+    expect(h.bank.requests.filter((r) => r.path.endsWith('/balances'))).toHaveLength(0);
+    // Only the account that got movements; the other one's balance still holds.
+    expect(second.connections[0].accounts.map((a) => a.balanceOutdated)).toEqual([true, undefined]);
+
+    // Nothing new later that day: it stays out of date until the balance is read again.
+    const third = await runSync({ host: h.host, config, connections: second.connections, now: new Date('2026-11-20T20:00:00') });
+    expect(third.connections[0].accounts[0].balanceOutdated).toBe(true);
+
+    const nextDay = await runSync({ host: h.host, config, connections: third.connections, now: new Date('2026-11-21T08:00:00') });
+    expect(nextDay.connections[0].accounts[0].balanceOutdated).toBeUndefined();
+  });
+
+  it('updates on request only the balances that are out of date, one read each', async () => {
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    const outdated = structuredClone(first.connections);
+    outdated[0].accounts[0].balanceOutdated = true;
+    h.bank.balances.checking = [{ balance_amount: { amount: '1470.00', currency: 'EUR' }, balance_type: 'ITBD' }];
+    h.bank.requests = [];
+
+    const { connections, updated, failures } = await refreshBalances({
+      host: h.host,
+      config,
+      connections: outdated,
+      keys: ['hash-checking'],
+      now: new Date('2026-11-20T18:00:00'),
+    });
+    expect([updated, failures]).toEqual([1, []]);
+    expect(h.bank.requests.map((r) => r.path)).toEqual(['/accounts/checking-1/balances']);
+    expect(connections[0].accounts[0].bankBalance).toMatchObject({ amount: '1470.00', fetchedAt: new Date('2026-11-20T18:00:00').toISOString() });
+    expect(connections[0].accounts[0].balanceOutdated).toBeUndefined();
+    expect(connections[0].accounts[1]).toEqual(outdated[0].accounts[1]);
+  });
+
+  it('keeps the balance out of date and says why when the bank refuses the read', async () => {
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    first.connections[0].accounts[0].balanceOutdated = true;
+    h.bank.balances.checking = 'error';
+
+    const { connections, updated, failures } = await refreshBalances({
+      host: h.host,
+      config,
+      connections: first.connections,
+      keys: ['hash-checking'],
+    });
+    expect(updated).toBe(0);
+    expect(failures.map((f) => [f.key, textEs(f.error)])).toEqual([['hash-checking', expect.stringMatching(/ASPSP error/)]]);
+    expect(connections[0].accounts[0]).toMatchObject({ balanceOutdated: true, bankBalance: { amount: '1480.00' } });
   });
 });
 

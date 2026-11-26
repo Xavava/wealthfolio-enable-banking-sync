@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareBalances, pickBalance } from '../src/lib/balance';
+import { compareBalances, pickBalance, withOutdated } from '../src/lib/balance';
 import { pendingDate } from '../src/lib/mapping';
 import { daysBetween, formatIsoDate, isValidStartDate, toDateOnly } from '../src/lib/state';
 import { syncStartDate } from '../src/lib/sync';
@@ -101,6 +101,14 @@ describe('balances', () => {
     expect(compareBalances(bank, { cashBalance: 1467.66, accountCurrency: 'EUR' })).toEqual({ state: 'mismatch', difference: -12.34 });
     expect(compareBalances(bank, { cashBalance: 1480, accountCurrency: 'USD' })).toEqual({ state: 'unknown', reason: 'currency' });
     expect(compareBalances(undefined, { cashBalance: 1, accountCurrency: 'EUR' })).toEqual({ state: 'unknown', reason: 'no-bank' });
+  });
+
+  it('turns a difference into an out-of-date balance only when movements came in after it', () => {
+    const mismatch = { state: 'mismatch', difference: -12.34 } as const;
+    expect(withOutdated(mismatch, true)).toEqual({ state: 'outdated' });
+    expect(withOutdated(mismatch, undefined)).toEqual(mismatch);
+    // A balance that still matches is shown as matching, out of date or not.
+    expect(withOutdated({ state: 'match' }, true)).toEqual({ state: 'match' });
   });
 });
 
