@@ -66,21 +66,14 @@ export function BalanceLine({ account, valuation }: { account: LinkedAccount; va
 
 /** What the bank gave the last time the add-on asked for the longest history. */
 export function HistoryLine({ account }: { account: LinkedAccount }) {
-  const { t, formatDay, formatWhen } = useText();
+  const { t, formatDay } = useText();
   const history = account.history;
   if (!history || !account.wealthfolioAccountId) return null;
   return (
     <p className="text-muted-foreground mt-1 text-xs">
       {history.earliest
-        ? t('connections.historyGiven', {
-            earliest: formatDay(history.earliest),
-            requested: formatDay(history.requestedFrom),
-            checked: formatWhen(history.checkedAt),
-          })
-        : t('connections.historyNone', {
-            requested: formatDay(history.requestedFrom),
-            checked: formatWhen(history.checkedAt),
-          })}
+        ? t('connections.historyGiven', { earliest: formatDay(history.earliest) })
+        : t('connections.historyNone', { requested: formatDay(history.requestedFrom) })}
     </p>
   );
 }

@@ -96,8 +96,8 @@ export const es = {
       'Elige el día siguiente al último movimiento que ya tengas en esta cuenta de Wealthfolio (por ejemplo, de un CSV) para no duplicarlo. Si está vacía, la fecha desde la que quieras historial.',
     historyHint:
       'Muchos bancos solo dan {{days}} días de historial, salvo en la hora siguiente a autorizar: sincroniza nada más conectar o renovar el banco.',
-    historyGiven: 'Historial que dio el banco: desde el {{earliest}} (pedido desde el {{requested}}; {{checked}}).',
-    historyNone: 'El banco no devolvió ningún movimiento desde el {{requested}} ({{checked}}).',
+    historyGiven: 'Historial que dio el banco: desde el {{earliest}}.',
+    historyNone: 'El banco no devolvió ningún movimiento desde el {{requested}}.',
     balanceBank: 'Banco:',
     balanceWealthfolio: 'Wealthfolio:',
     balanceMatch: 'Cuadra',

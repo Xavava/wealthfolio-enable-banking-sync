@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-enable-banking-sync-addon",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Sync your bank account transactions with one click through Enable Banking (PSD2)",
   "type": "module",
   "main": "dist/addon.js",

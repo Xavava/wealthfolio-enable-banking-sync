@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.3] - 2026-11-27
+
+### Changed
+
+- La línea «Historial que dio el banco» de cada cuenta solo dice desde qué fecha dio movimientos
+  el banco. Se quitan la fecha pedida, que ya está en *Bancos conectados*, y el momento en que se
+  pidió. Si el banco no devolvió nada, sigue diciendo desde qué fecha se pidió.
+
 ## [1.8.2] - 2026-11-26
 
 ### Fixed

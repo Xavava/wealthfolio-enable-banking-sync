@@ -93,8 +93,8 @@ export const en: Translations = {
       'Choose the day after the last transaction you already have in this Wealthfolio account (for example, from a CSV) so it is not duplicated. If the account is empty, the date you want history from.',
     historyHint:
       'Many banks only give {{days}} days of history, except in the hour after you authorize: sync right after connecting or renewing the bank.',
-    historyGiven: 'History the bank gave: from {{earliest}} (asked from {{requested}}; {{checked}}).',
-    historyNone: 'The bank returned no transactions since {{requested}} ({{checked}}).',
+    historyGiven: 'History the bank gave: from {{earliest}}.',
+    historyNone: 'The bank returned no transactions since {{requested}}.',
     balanceBank: 'Bank:',
     balanceWealthfolio: 'Wealthfolio:',
     balanceMatch: 'Matches',
