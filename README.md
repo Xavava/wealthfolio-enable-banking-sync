@@ -182,10 +182,10 @@ transactions, or that Wealthfolio has not finished recalculating. For credit car
 report the debt as positive; this shows as "matches (the bank shows it with the opposite sign)".
 
 If a later sync imports transactions into an account, its bank balance no longer includes them.
-Instead of a difference you then see "Bank balance older than the latest transactions", and
-**Update balances** appears next to *Sync now*: it reads the balance again for those accounts
-only, one request per account. If you do not press it, the balance is read on the next day's
-first sync.
+The difference is still shown, explained as "The bank balance is older than the latest imported
+transactions", and **Update balances** appears next to *Sync now*: it reads the balance again for
+those accounts only, one request per account. If you do not press it, the balance is read on the
+next day's first sync.
 
 The balance compared is the **booked** one, not the *available* balance your bank's app shows:
 the difference between them is holds (card payments not settled yet).

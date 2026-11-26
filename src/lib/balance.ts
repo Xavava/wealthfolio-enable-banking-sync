@@ -79,13 +79,13 @@ export function compareBalances(
   return { state: 'mismatch', difference: (wfCents - bankCents) / 100 };
 }
 
-/** A difference expected because movements came in after the bank gave its balance. */
-export type AccountBalanceCheck = BalanceCheck | { state: 'outdated' };
-
 /**
- * The check shown for an account: a difference while its balance is out of date
- * is not a problem to review, only a balance to read again.
+ * A difference while movements came in after the bank gave its balance: the bank's
+ * figure does not include them yet, so it has to be read again.
  */
+export type AccountBalanceCheck = BalanceCheck | { state: 'outdated'; difference: number };
+
+/** The check shown for an account, telling an out-of-date bank balance apart. */
 export function withOutdated(check: BalanceCheck, balanceOutdated?: boolean): AccountBalanceCheck {
-  return check.state === 'mismatch' && balanceOutdated ? { state: 'outdated' } : check;
+  return check.state === 'mismatch' && balanceOutdated ? { state: 'outdated', difference: check.difference } : check;
 }

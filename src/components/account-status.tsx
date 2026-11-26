@@ -40,18 +40,23 @@ export function BalanceLine({ account, valuation }: { account: LinkedAccount; va
       {check.state === 'match-inverted' && (
         <Badge variant="success-subtle">{t('connections.balanceMatchInverted')}</Badge>
       )}
-      {check.state === 'mismatch' && (
+      {(check.state === 'mismatch' || check.state === 'outdated') && (
         <>
           <Badge variant="warning-subtle">
             {t('connections.balanceMismatch', { difference: formatMoney(check.difference, bank.currency, true) })}
           </Badge>
           <span className="text-muted-foreground w-full">
-            {t('connections.balanceMismatchHelp')}
-            {!isBookedBalance(bank) && ` ${t('connections.balanceAvailableOnly')}`}
+            {check.state === 'outdated' ? (
+              t('connections.balanceOutdated')
+            ) : (
+              <>
+                {t('connections.balanceMismatchHelp')}
+                {!isBookedBalance(bank) && ` ${t('connections.balanceAvailableOnly')}`}
+              </>
+            )}
           </span>
         </>
       )}
-      {check.state === 'outdated' && <Badge variant="secondary">{t('connections.balanceOutdated')}</Badge>}
       {check.state === 'unknown' && check.reason === 'currency' && (
         <span className="text-muted-foreground">{t('connections.balanceCurrencies')}</span>
       )}

@@ -103,7 +103,7 @@ export const es = {
     balanceMatch: 'Cuadra',
     balanceMatchInverted: 'Cuadra (el banco lo muestra con el signo contrario)',
     balanceMismatch: 'Descuadre: {{difference}}',
-    balanceOutdated: 'Saldo del banco anterior a los últimos movimientos',
+    balanceOutdated: 'El saldo del banco es anterior a los últimos movimientos importados.',
     balanceMismatchHelp:
       'Puede haber movimientos duplicados con un CSV (fecha de inicio solapada), faltar historial anterior a la fecha de inicio, haber movimientos pendientes o rechazados, o Wealthfolio no haber terminado de recalcular.',
     balanceAvailableOnly: 'El banco solo da saldo disponible, que puede incluir crédito o retenciones.',

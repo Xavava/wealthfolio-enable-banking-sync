@@ -190,10 +190,10 @@ tarjetas de crédito el banco puede dar la deuda en positivo; se indica como «c
 contrario».
 
 Si una sincronización posterior importa movimientos en una cuenta, su saldo del banco ya no los
-incluye. Entonces, en vez de un descuadre, verás «Saldo del banco anterior a los últimos
-movimientos», y junto a *Sincronizar ahora* aparece **Actualizar saldos**: vuelve a leer el saldo
-solo de esas cuentas, una consulta por cuenta. Si no lo pulsas, se lee en la primera
-sincronización del día siguiente.
+incluye. El descuadre se sigue mostrando, con la explicación «El saldo del banco es anterior a
+los últimos movimientos importados», y junto a *Sincronizar ahora* aparece **Actualizar saldos**:
+vuelve a leer el saldo solo de esas cuentas, una consulta por cuenta. Si no lo pulsas, se lee en
+la primera sincronización del día siguiente.
 
 El saldo que compara es el **contabilizado**, no el *disponible* que muestra la app del banco:
 la diferencia entre los dos son las retenciones (pagos con tarjeta aún sin liquidar).

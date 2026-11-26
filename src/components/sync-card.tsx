@@ -200,10 +200,11 @@ export function SyncCard({ state }: { state: AddonState }) {
     account: s.account,
     check: balanceCheck(s.account, valuations.data?.get(s.account.wealthfolioAccountId!)),
   }));
-  // Accounts with an error in the last sync or whose balance does not match.
+  // Accounts with an error in the last sync or whose balance does not match, also
+  // when the bank's balance is only out of date.
   const toCheck =
     (report?.accounts.filter((row) => row.status !== 'ok').length ?? 0) +
-    checks.filter((c) => c.check?.state === 'mismatch').length;
+    checks.filter((c) => c.check?.state === 'mismatch' || c.check?.state === 'outdated').length;
   const attention = Boolean(report?.importError) || toCheck > 0;
   // Differences that come from movements imported after the bank gave its balance.
   const outdated = checks.filter((c) => c.check?.state === 'outdated').map((c) => c.account);

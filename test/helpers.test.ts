@@ -103,9 +103,9 @@ describe('balances', () => {
     expect(compareBalances(undefined, { cashBalance: 1, accountCurrency: 'EUR' })).toEqual({ state: 'unknown', reason: 'no-bank' });
   });
 
-  it('turns a difference into an out-of-date balance only when movements came in after it', () => {
+  it('tells a difference from an out-of-date bank balance only when movements came in after it', () => {
     const mismatch = { state: 'mismatch', difference: -12.34 } as const;
-    expect(withOutdated(mismatch, true)).toEqual({ state: 'outdated' });
+    expect(withOutdated(mismatch, true)).toEqual({ state: 'outdated', difference: -12.34 });
     expect(withOutdated(mismatch, undefined)).toEqual(mismatch);
     // A balance that still matches is shown as matching, out of date or not.
     expect(withOutdated({ state: 'match' }, true)).toEqual({ state: 'match' });

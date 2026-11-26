@@ -5,10 +5,11 @@
 ### Fixed
 
 - El saldo del banco se lee en la primera sincronización del día. Si otra sincronización ese día
-  importaba movimientos, Wealthfolio los sumaba y la comparación mostraba un descuadre falso por
-  ese importe hasta el día siguiente. Ahora el add-on recuerda que el saldo del banco es anterior
-  a esos movimientos y en lugar del descuadre muestra «Saldo del banco anterior a los últimos
-  movimientos». Este aviso no cuenta como cuenta por revisar ni despliega la tarjeta.
+  importaba movimientos, Wealthfolio los sumaba y la comparación mostraba un descuadre por ese
+  importe hasta el día siguiente, sin explicar por qué. Ahora el add-on recuerda que el saldo del
+  banco es anterior a esos movimientos, y bajo el descuadre de esa cuenta dice «El saldo del banco
+  es anterior a los últimos movimientos importados» en lugar de las causas generales. Sigue
+  contando como cuenta por revisar.
 - Mientras haya algún saldo así, junto a *Sincronizar ahora* aparece **Actualizar saldos**, que
   vuelve a leer el saldo solo de esas cuentas (una consulta por cuenta). Si no se pulsa, el saldo
   se lee en la primera sincronización del día siguiente.

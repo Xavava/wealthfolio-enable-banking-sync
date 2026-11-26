@@ -100,7 +100,7 @@ export const en: Translations = {
     balanceMatch: 'Matches',
     balanceMatchInverted: 'Matches (the bank shows it with the opposite sign)',
     balanceMismatch: 'Difference: {{difference}}',
-    balanceOutdated: 'Bank balance older than the latest transactions',
+    balanceOutdated: 'The bank balance is older than the latest imported transactions.',
     balanceMismatchHelp:
       'There may be transactions duplicated with a CSV (overlapping start date), missing history before the start date, pending or rejected transactions, or Wealthfolio may not have finished recalculating.',
     balanceAvailableOnly: 'The bank only gives the available balance, which may include credit or holds.',
