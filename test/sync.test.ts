@@ -31,9 +31,9 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
       now: new Date('2026-11-20T10:00:00'),
       onProgress: (text) => progress.push(textEs(text)),
     });
-    expect(report.accounts.map((a) => [a.wealthfolioAccount, a.iban, a.account])).toEqual([
-      ['wf-checking', 'ES91 •••• 1332', 'Cuenta Nómina'],
-      ['wf-savings', 'ES79 •••• 6789', 'Cuenta Ahorro'],
+    expect(report.accounts.map((a) => [a.key, a.wealthfolioAccount, a.iban, a.account])).toEqual([
+      ['hash-checking', 'wf-checking', 'ES91 •••• 1332', 'Cuenta Nómina'],
+      ['hash-savings', 'wf-savings', 'ES79 •••• 6789', 'Cuenta Ahorro'],
     ]);
     expect(progress.some((p) => p.includes('Banco Test · wf-checking'))).toBe(true);
     // The full IBAN never goes into the stored report.

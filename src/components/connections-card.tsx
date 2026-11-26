@@ -1,20 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { Account, AccountValuation } from '@wealthfolio/addon-sdk';
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Input,
-} from '@wealthfolio/ui';
+import type { Account } from '@wealthfolio/addon-sdk';
+import { Alert, AlertDescription, Badge, Button, Input } from '@wealthfolio/ui';
 import { RotateCcw, Unplug } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { compareBalances, isBookedBalance } from '../lib/balance';
 import { maskIban } from '../lib/mapping';
 import {
   addDays,
@@ -31,68 +19,24 @@ import {
   useAddonCtx,
   useClient,
   useSaveConnections,
-  useValuations,
   useWealthfolioAccounts,
   type AddonState,
 } from '../hooks/use-addon-data';
 import { useText } from '../i18n';
+import { CollapsibleCard } from './collapsible-card';
 import { NativeSelect } from './ui-bits';
 
 /** Many banks only give ~90 days of history to an unattended request. */
 const TYPICAL_HISTORY_DAYS = 90;
 
-function BalanceLine({ account, valuation }: { account: LinkedAccount; valuation?: AccountValuation }) {
-  const { t, formatDay, formatMoney } = useText();
-  const bank = account.bankBalance;
-  if (!bank || !account.wealthfolioAccountId) return null;
-  const check = compareBalances(
-    bank,
-    valuation ? { cashBalance: valuation.cashBalance, accountCurrency: valuation.accountCurrency } : undefined,
-  );
-  const bankDate = bank.referenceDate ?? bank.fetchedAt;
-
-  return (
-    <div className="bg-muted/40 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-3 py-2 text-xs">
-      <span>
-        {t('connections.balanceBank')} <b className="tabular-nums">{formatMoney(Number(bank.amount), bank.currency)}</b>{' '}
-        <span className="text-muted-foreground">
-          ({bank.type}, {formatDay(bankDate)})
-        </span>
-      </span>
-      {valuation && (
-        <span>
-          {t('connections.balanceWealthfolio')}{' '}
-          <b className="tabular-nums">{formatMoney(valuation.cashBalance, valuation.accountCurrency)}</b>{' '}
-          <span className="text-muted-foreground">({formatDay(valuation.valuationDate)})</span>
-        </span>
-      )}
-      {check.state === 'match' && <Badge variant="success-subtle">{t('connections.balanceMatch')}</Badge>}
-      {check.state === 'match-inverted' && (
-        <Badge variant="success-subtle">{t('connections.balanceMatchInverted')}</Badge>
-      )}
-      {check.state === 'mismatch' && (
-        <>
-          <Badge variant="warning-subtle">
-            {t('connections.balanceMismatch', { difference: formatMoney(check.difference, bank.currency, true) })}
-          </Badge>
-          <span className="text-muted-foreground w-full">
-            {t('connections.balanceMismatchHelp')}
-            {!isBookedBalance(bank) && ` ${t('connections.balanceAvailableOnly')}`}
-          </span>
-        </>
-      )}
-      {check.state === 'unknown' && check.reason === 'currency' && (
-        <span className="text-muted-foreground">{t('connections.balanceCurrencies')}</span>
-      )}
-    </div>
-  );
-}
+/** Days before expiry when a consent starts asking to be renewed. */
+const RENEW_WARNING_DAYS = 7;
 
 function ConsentBadge({ connection }: { connection: BankConnection }) {
   const { t, formatDay } = useText();
   if (isExpired(connection)) return <Badge variant="destructive-subtle">{t('connections.consentExpired')}</Badge>;
   const days = daysLeft(connection);
-  if (days <= 7) return <Badge variant="warning-subtle">{t('connections.expiresIn', { n: days })}</Badge>;
+  if (days <= RENEW_WARNING_DAYS) return <Badge variant="warning-subtle">{t('connections.expiresIn', { n: days })}</Badge>;
   return (
     <Badge variant="success-subtle">
       {t('connections.validUntil', { date: formatDay(toIsoDate(new Date(connection.validUntil))) })}
@@ -173,22 +117,21 @@ function StartDateInput({
   );
 }
 
+/** Where a bank account goes and from when: the sync results are in the Sync card. */
 function AccountRow({
   account,
   wfAccounts,
   duplicateTarget,
-  valuation,
   onChange,
   onChooseTarget,
 }: {
   account: LinkedAccount;
   wfAccounts: Account[];
   duplicateTarget: boolean;
-  valuation?: AccountValuation;
   onChange: (patch: Partial<LinkedAccount>) => void;
   onChooseTarget: (wealthfolioAccountId: string | null) => void;
 }) {
-  const { t, language, formatDay, formatWhen } = useText();
+  const { t, language, formatDay } = useText();
   const target = wfAccounts.find((a) => a.id === account.wealthfolioAccountId);
   const currencyMismatch = target && account.currency && target.currency !== account.currency;
   const sorted = [...wfAccounts].sort((a, b) => {
@@ -198,19 +141,19 @@ function AccountRow({
   const today = toIsoDate(new Date());
   const beyondTypicalHistory =
     Boolean(account.syncFromConfirmed) && account.syncFrom < addDays(today, -TYPICAL_HISTORY_DAYS);
+  // Banks often name every account after its holder: the IBAN tells them apart.
+  const title = account.iban ? maskIban(account.iban) : account.name;
+  const details = [account.iban ? account.name : undefined, account.currency, account.cashAccountType];
 
   return (
-    <div className="border-t py-3 first:border-t-0">
-    <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+    <div className="grid gap-3 border-t py-3 first:border-t-0 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
       <div className="min-w-0">
-        <div className="truncate font-medium">{account.name}</div>
-        <div className="text-muted-foreground text-xs">
-          {[maskIban(account.iban), account.currency, account.cashAccountType].filter(Boolean).join(' · ')}
-        </div>
+        <div className="truncate font-medium">{title}</div>
+        <div className="text-muted-foreground text-xs">{details.filter(Boolean).join(' · ')}</div>
       </div>
       <div className="space-y-1">
         <NativeSelect
-          aria-label={t('connections.targetLabel', { account: account.name })}
+          aria-label={t('connections.targetLabel', { account: title })}
           value={account.wealthfolioAccountId ?? ''}
           onChange={(e) => onChooseTarget(e.target.value || null)}
         >
@@ -231,18 +174,10 @@ function AccountRow({
         )}
       </div>
       <div className="space-y-1 sm:w-44">
-        {account.lastSyncedAt ? (
-          <div className="text-muted-foreground text-xs">
-            {t('connections.lastSync')}
-            <br />
-            {formatWhen(account.lastSyncedAt)}
-            {account.retryFrom && (
-              <>
-                <br />
-                {t('connections.retryFrom', { date: formatDay(account.retryFrom) })}
-              </>
-            )}
-          </div>
+        {account.wealthfolioAccountId && account.lastSyncedDate ? (
+          <p className="text-muted-foreground text-xs">
+            {t('connections.importsFrom', { date: formatDay(account.syncFrom) })}
+          </p>
         ) : (
           <>
             <StartDateInput
@@ -263,30 +198,6 @@ function AccountRow({
         )}
       </div>
     </div>
-    <HistoryLine account={account} />
-    <BalanceLine account={account} valuation={valuation} />
-    </div>
-  );
-}
-
-/** What the bank gave the last time the add-on asked for the longest history. */
-function HistoryLine({ account }: { account: LinkedAccount }) {
-  const { t, formatDay, formatWhen } = useText();
-  const history = account.history;
-  if (!history || !account.wealthfolioAccountId) return null;
-  return (
-    <p className="text-muted-foreground mt-2 text-xs">
-      {history.earliest
-        ? t('connections.historyGiven', {
-            earliest: formatDay(history.earliest),
-            requested: formatDay(history.requestedFrom),
-            checked: formatWhen(history.checkedAt),
-          })
-        : t('connections.historyNone', {
-            requested: formatDay(history.requestedFrom),
-            checked: formatWhen(history.checkedAt),
-          })}
-    </p>
   );
 }
 
@@ -310,17 +221,18 @@ export function ConnectionsCard({
   const usable = (wfAccounts.data ?? []).filter(
     (a) => a.isActive && !a.isArchived && a.trackingMode !== 'HOLDINGS',
   );
-  const valuations = useValuations(
-    state.connections.flatMap((c) =>
-      c.accounts.filter((a) => a.wealthfolioAccountId && a.bankBalance).map((a) => a.wealthfolioAccountId!),
-    ),
-  );
 
   const targetCounts = new Map<string, number>();
   for (const c of state.connections)
     for (const a of c.accounts)
       if (a.wealthfolioAccountId)
         targetCounts.set(a.wealthfolioAccountId, (targetCounts.get(a.wealthfolioAccountId) ?? 0) + 1);
+
+  const linked = state.connections.flatMap((c) => c.accounts).filter((a) => a.wealthfolioAccountId);
+  const attention =
+    state.connections.some((c) => isExpired(c) || daysLeft(c) <= RENEW_WARNING_DAYS) ||
+    linked.some((a) => !a.lastSyncedDate && !a.syncFromConfirmed) ||
+    (state.connections.length > 0 && linked.length === 0);
 
   const updateAccount = async (sessionId: string, key: string, patch: Partial<LinkedAccount>) => {
     const next = state.connections.map((c) =>
@@ -364,71 +276,67 @@ export function ConnectionsCard({
   if (state.connections.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t('connections.title')}</CardTitle>
-        <CardDescription>{t('connections.description', { none: t('connections.noSync') })}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {wfAccounts.isSuccess && usable.length === 0 && (
-          <Alert variant="warning">
-            <AlertDescription>{t('connections.noAccounts')}</AlertDescription>
-          </Alert>
-        )}
-        {state.connections.map((connection) => (
-          <div key={connection.sessionId} className="rounded-lg border p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">{connection.aspsp.name}</span>
-                <ConsentBadge connection={connection} />
-              </div>
-              {confirming === connection.sessionId ? (
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span>{t('connections.confirmDisconnect')}</span>
-                  <Button size="sm" variant="destructive" onClick={() => disconnect(connection)}>
-                    {t('connections.yesDisconnect')}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
-                    {t('common.cancel')}
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => onReconnect(connection.aspsp)}>
-                    <RotateCcw className="size-4" /> {t('connections.renew')}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirming(connection.sessionId)}>
-                    <Unplug className="size-4" /> {t('connections.disconnect')}
-                  </Button>
-                </div>
-              )}
+    <CollapsibleCard
+      id="connections"
+      title={t('connections.title')}
+      defaultOpen={false}
+      attention={attention}
+      summary={t('connections.collapsedSummary', { banks: state.connections.length, accounts: linked.length })}
+      description={t('connections.description', { none: t('connections.noSync') })}
+      contentClassName="space-y-6"
+    >
+      {wfAccounts.isSuccess && usable.length === 0 && (
+        <Alert variant="warning">
+          <AlertDescription>{t('connections.noAccounts')}</AlertDescription>
+        </Alert>
+      )}
+      {state.connections.map((connection) => (
+        <div key={connection.sessionId} className="rounded-lg border p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{connection.aspsp.name}</span>
+              <ConsentBadge connection={connection} />
             </div>
-            {connection.accounts.map((account) => (
-              <AccountRow
-                key={account.key}
-                account={account}
-                wfAccounts={usable}
-                duplicateTarget={
-                  Boolean(account.wealthfolioAccountId) &&
-                  (targetCounts.get(account.wealthfolioAccountId!) ?? 0) > 1
-                }
-                valuation={
-                  account.wealthfolioAccountId
-                    ? valuations.data?.get(account.wealthfolioAccountId)
-                    : undefined
-                }
-                onChange={(patch) => updateAccount(connection.sessionId, account.key, patch)}
-                onChooseTarget={(id) => chooseTarget(connection.sessionId, account, id)}
-              />
-            ))}
+            {confirming === connection.sessionId ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span>{t('connections.confirmDisconnect')}</span>
+                <Button size="sm" variant="destructive" onClick={() => disconnect(connection)}>
+                  {t('connections.yesDisconnect')}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                  {t('common.cancel')}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => onReconnect(connection.aspsp)}>
+                  <RotateCcw className="size-4" /> {t('connections.renew')}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirming(connection.sessionId)}>
+                  <Unplug className="size-4" /> {t('connections.disconnect')}
+                </Button>
+              </div>
+            )}
           </div>
-        ))}
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-      </CardContent>
-    </Card>
+          {connection.accounts.map((account) => (
+            <AccountRow
+              key={account.key}
+              account={account}
+              wfAccounts={usable}
+              duplicateTarget={
+                Boolean(account.wealthfolioAccountId) && (targetCounts.get(account.wealthfolioAccountId!) ?? 0) > 1
+              }
+              onChange={(patch) => updateAccount(connection.sessionId, account.key, patch)}
+              onChooseTarget={(id) => chooseTarget(connection.sessionId, account, id)}
+            />
+          ))}
+        </div>
+      ))}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </CollapsibleCard>
   );
 }

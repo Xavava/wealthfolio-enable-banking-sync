@@ -20,6 +20,7 @@ export const QK = {
     ['enable-banking-sync', 'aspsps', applicationId, country] as const,
   wfAccounts: ['enable-banking-sync', 'wealthfolio-accounts'] as const,
   valuations: ['enable-banking-sync', 'valuations'] as const,
+  ui: ['enable-banking-sync', 'ui-cards'] as const,
 };
 
 export interface AddonState {

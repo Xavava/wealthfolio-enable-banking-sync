@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.5.2] - 2026-11-26
+
+### Changed
+
+- Todo lo que pasa con cada cuenta se ve en un solo sitio, la tarjeta *Sincronización*: una fila
+  por cuenta sincronizada con los números de la última sincronización, sus avisos, la última
+  sincronización correcta y desde cuándo se vuelve a revisar, el historial que dio el banco y la
+  comprobación de saldo. Las cuentas recién asociadas aparecen aunque aún no se hayan
+  sincronizado, con lo que les falta.
+- *Bancos conectados* queda solo para configurar (consentimiento, renovar o desconectar, cuenta de
+  destino y fecha de inicio) y cada cuenta se identifica por su IBAN abreviado en lugar del
+  nombre del titular.
+- Las tarjetas se pliegan desde su título y el add-on recuerda cómo las dejaste. Plegadas
+  muestran una línea de resumen y «Sincronizar ahora» sigue a mano. Una tarjeta plegada se
+  despliega sola cuando necesita atención (un error o un descuadre en la sincronización, un
+  consentimiento caducado o que caduca en 7 días, una fecha de inicio por elegir, una
+  autorización a medias) y *Sincronización* se despliega siempre al sincronizar.
+- El informe guarda a qué cuenta pertenece cada fila. Los de la 1.5.0 y la 1.5.1 se asocian por el
+  IBAN abreviado; los anteriores se muestran aparte hasta la siguiente sincronización.
+
 ## [1.5.1] - 2026-11-23
 
 ### Changed
@@ -15,7 +35,7 @@
 ### Changed
 
 - El informe de sincronización identifica cada fila por su cuenta de Wealthfolio, con el banco y
-  el IBAN abreviado debajo (por ejemplo «Cuenta 1 - Operativa» / «BBVA · ES60 •••• 1026»), en
+  el IBAN abreviado debajo (por ejemplo «Cuenta corriente» / «BBVA · ES91 •••• 1332»), en
   lugar del nombre que da el banco, que suele ser el del titular y se repite en todas. Los
   mensajes de progreso y la lista de movimientos rechazados usan también la cuenta de Wealthfolio.
   El informe guardado antes se sigue viendo como antes hasta la siguiente sincronización.

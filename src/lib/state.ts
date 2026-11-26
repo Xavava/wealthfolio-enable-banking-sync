@@ -95,12 +95,14 @@ export interface InvalidRowInfo {
 export type SyncStatus = 'ok' | 'error' | 'reconnect' | 'blocked';
 
 export interface SyncAccountResult {
+  /** `LinkedAccount.key` of the account (reports from 1.5.2 on). */
+  key?: string;
   bank: string;
   /** Account name as the bank gives it (often just the holder's name). */
   account: string;
   /** Name of the Wealthfolio account it syncs into (reports from 1.5.0 on). */
   wealthfolioAccount?: string;
-  /** Masked IBAN of the bank account, e.g. "ES60 •••• 1026" (reports from 1.5.0 on). */
+  /** Masked IBAN of the bank account, e.g. "ES91 •••• 1332" (reports from 1.5.0 on). */
   iban?: string;
   status: SyncStatus;
   fetched: number;
@@ -135,7 +137,11 @@ const KEYS = {
   connections: 'connections',
   pending: 'pending-authorization',
   lastReport: 'last-sync-report',
+  ui: 'ui-cards',
 } as const;
+
+/** Which cards of the page the user left open (true) or folded (false). */
+export type UiPrefs = Partial<Record<string, boolean>>;
 
 type Storage = HostAPI['storage'];
 
@@ -166,6 +172,8 @@ export const store = {
   clearPending: (s: Storage) => s.delete(KEYS.pending),
   loadLastReport: (s: Storage) => readJson<SyncReport | null>(s, KEYS.lastReport, null),
   saveLastReport: (s: Storage, report: SyncReport) => writeJson(s, KEYS.lastReport, report),
+  loadUi: (s: Storage) => readJson<UiPrefs>(s, KEYS.ui, {}),
+  saveUi: (s: Storage, prefs: UiPrefs) => writeJson(s, KEYS.ui, prefs),
 };
 
 /** Local calendar date as YYYY-MM-DD. */

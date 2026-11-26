@@ -3,11 +3,6 @@ import {
   Alert,
   AlertDescription,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
 } from '@wealthfolio/ui';
 import { Landmark, LoaderCircle } from 'lucide-react';
@@ -24,6 +19,7 @@ import {
   type AddonState,
 } from '../hooks/use-addon-data';
 import { useText } from '../i18n';
+import { CollapsibleCard } from './collapsible-card';
 import { CopyField, Field, NativeSelect } from './ui-bits';
 
 const PSD2_COUNTRIES = [
@@ -169,15 +165,15 @@ export function ConnectBankCard({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Landmark className="size-4" />{' '}
-          {reconnect ? t('connect.titleRenew', { bank: reconnect.name }) : t('connect.titleNew')}
-        </CardTitle>
-        <CardDescription>{t('connect.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard
+      id="connect"
+      icon={<Landmark className="size-4" />}
+      title={reconnect ? t('connect.titleRenew', { bank: reconnect.name }) : t('connect.titleNew')}
+      description={t('connect.description')}
+      defaultOpen={state.connections.length === 0}
+      attention={Boolean(pending || reconnect)}
+      contentClassName="space-y-4"
+    >
         {!pending && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -290,7 +286,6 @@ export function ConnectBankCard({
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

@@ -5,11 +5,6 @@ import {
   AlertTitle,
   Badge,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
   Textarea,
 } from '@wealthfolio/ui';
@@ -31,6 +26,7 @@ import {
   type AddonState,
 } from '../hooks/use-addon-data';
 import { useText } from '../i18n';
+import { CollapsibleCard } from './collapsible-card';
 import { Field } from './ui-bits';
 
 export function SettingsCard({ state }: { state: AddonState }) {
@@ -104,15 +100,21 @@ export function SettingsCard({ state }: { state: AddonState }) {
   const redirectUrls = app?.redirect_urls ?? [];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <KeyRound className="size-4" /> {t('settings.title')}
-          {configured && !application.isError && <Badge variant="success-subtle">{t('settings.configured')}</Badge>}
-        </CardTitle>
-        <CardDescription>{rich('settings.description', { environment: <b>Production</b> })}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <CollapsibleCard
+      id="settings"
+      icon={<KeyRound className="size-4" />}
+      title={t('settings.title')}
+      badge={
+        configured && !application.isError ? (
+          <Badge variant="success-subtle">{t('settings.configured')}</Badge>
+        ) : undefined
+      }
+      summary={app?.name}
+      description={rich('settings.description', { environment: <b>Production</b> })}
+      defaultOpen={!configured}
+      attention={!configured || application.isError}
+      contentClassName="space-y-4"
+    >
         {configured && !editing && (
           <div className="space-y-2 text-sm">
             <div>
@@ -200,7 +202,6 @@ export function SettingsCard({ state }: { state: AddonState }) {
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

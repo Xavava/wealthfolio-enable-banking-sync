@@ -86,9 +86,9 @@ export const en: Translations = {
     noSync: 'Do not sync',
     currencyMismatch: 'The bank account is in {{bankCurrency}} and the Wealthfolio account in {{wealthfolioCurrency}}.',
     duplicateTarget: 'Another bank account also syncs into this Wealthfolio account.',
-    lastSync: 'Last sync:',
     retryFrom: 'Checked again from {{date}}',
     importFrom: 'Import from',
+    importsFrom: 'Imports from {{date}}',
     chooseStart:
       'Choose the day after the last transaction you already have in this Wealthfolio account (for example, from a CSV) so it is not duplicated. If the account is empty, the date you want history from.',
     historyHint:
@@ -104,6 +104,7 @@ export const en: Translations = {
       'There may be transactions duplicated with a CSV (overlapping start date), missing history before the start date, pending or rejected transactions, or Wealthfolio may not have finished recalculating.',
     balanceAvailableOnly: 'The bank only gives the available balance, which may include credit or holds.',
     balanceCurrencies: 'Different currencies: not compared.',
+    collapsedSummary: '{{banks}} bank(s) · {{accounts}} synced account(s)',
   },
   syncCard: {
     title: 'Sync',
@@ -113,6 +114,11 @@ export const en: Translations = {
     noMapped: 'Connect a bank and assign at least one of its accounts to a Wealthfolio account to be able to sync.',
     failedTitle: 'Sync failed',
     lastSync: 'Last sync: {{when}}',
+    lastGoodSync: 'Last successful sync: {{when}}',
+    collapsedSummary: 'Last: {{when}} · {{n}} new',
+    toCheck: '{{n}} account(s) to check',
+    notSyncedYet: 'Not synced yet.',
+    needsStartDate: 'Choose the date to import from in "Connected banks".',
     newCount: '{{n}} new',
     duplicateCount: '{{n}} already imported',
     transferCount: '{{n}} transfer(s) between your accounts',

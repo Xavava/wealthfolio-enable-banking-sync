@@ -51,7 +51,7 @@ persona tiene que crear **su propia** aplicación: sus condiciones no permiten d
 
 ## 2. Instala el add-on
 
-Descarga `wealthfolio-enable-banking-sync-addon-1.5.1.zip` de la página de versiones
+Descarga `wealthfolio-enable-banking-sync-addon-1.5.2.zip` de la página de versiones
 (*Releases*). En Wealthfolio, ve a **Ajustes → Complementos**, pulsa **Instalar desde archivo**
 y selecciona el zip.
 
@@ -92,8 +92,15 @@ dejado salir la petición». Para arreglarlo: **Ajustes → Complementos**, pasa
    Conviene crear antes en Wealthfolio una cuenta de tipo *Efectivo* (o *Tarjeta de crédito*)
    por cada cuenta del banco. Elige también desde qué fecha importar la primera vez: no hay
    fecha por defecto y, hasta que la elijas, esa cuenta no se sincroniza (ver más abajo).
-4. Pulsa **Sincronizar ahora**. Verás cuántos movimientos se descargaron, cuántos eran nuevos
-   y cuántos ya estaban.
+4. Pulsa **Sincronizar ahora**. La tarjeta *Sincronización* muestra cada cuenta sincronizada con
+   lo que le pasó: cuántos movimientos se descargaron, cuántos eran nuevos y cuántos ya estaban,
+   sus avisos, el historial que dio el banco y la comprobación de saldo. *Bancos conectados*
+   queda solo para configurar.
+
+Cada tarjeta se pliega desde su título para ocupar menos, y el add-on recuerda cómo la dejaste.
+Una tarjeta plegada se despliega sola cuando necesita tu atención (un error, un saldo que no
+cuadra, un consentimiento a punto de caducar, una fecha de inicio por elegir), y *Sincronización*
+se despliega siempre al sincronizar.
 
 Cuando caduque el consentimiento (normalmente entre 90 y 180 días, según el banco), pulsa
 **Renovar** en ese banco y repite la autorización. Se conservan las asociaciones de cuentas y el
@@ -147,7 +154,7 @@ en la primera sincronización de cada cuenta:
   el **día siguiente**. Si la cuenta está vacía, la fecha desde la que quieras historial.
 - Mientras no elijas la fecha, esa cuenta no se sincroniza (estado *Revisar fecha*).
 - Si te equivocas y se duplica algo, el saldo de Wealthfolio no cuadrará con el del banco y lo
-  verás en *Bancos conectados*.
+  verás en la tarjeta *Sincronización*.
 - Al revés, un movimiento que el banco contabilizó el último día del CSV después de que lo
   descargaras no estará en ninguno de los dos: también lo delata el saldo.
 
@@ -162,7 +169,7 @@ prepago), hazlo en una cuenta de Wealthfolio distinta de las que sincroniza el a
 ## Comprobación de saldo
 
 En cada sincronización se lee el saldo de cada cuenta (como mucho una vez al día, por el
-límite de consultas PSD2), prefiriendo el saldo contabilizado. En *Bancos conectados* verás el
+límite de consultas PSD2), prefiriendo el saldo contabilizado. En *Sincronización* verás el
 saldo del banco junto al de Wealthfolio y si **cuadran**. Un descuadre suele indicar historial
 anterior a la fecha de inicio que falta, movimientos pendientes o rechazados, o que Wealthfolio
 aún no ha terminado de recalcular. En tarjetas de crédito el banco puede dar la deuda en
@@ -183,7 +190,7 @@ Si se le pide un rango que no guarda, BBVA no da error: devuelve una lista **vac
 - La primera sincronización de cada cuenta, y cualquiera que empiece hace más de 90 días, pide a
   Enable Banking el historial **más largo** que conserve el banco a partir de tu fecha de inicio
   (`strategy=longest`). Así entra lo que haya en lugar de nada.
-- El informe y *Bancos conectados* dicen desde qué fecha dio movimientos el banco y desde cuándo
+- La tarjeta *Sincronización* dice, para cada cuenta, desde qué fecha dio movimientos el banco y desde cuándo
   los pediste.
 - Si el banco no devuelve ningún movimiento, la cuenta **no** se da por sincronizada (estado
   *Revisar fecha*): la siguiente sincronización vuelve a intentarlo desde la misma fecha.

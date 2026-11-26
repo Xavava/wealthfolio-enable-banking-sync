@@ -89,9 +89,9 @@ export const es = {
     noSync: 'No sincronizar',
     currencyMismatch: 'La cuenta del banco está en {{bankCurrency}} y la de Wealthfolio en {{wealthfolioCurrency}}.',
     duplicateTarget: 'Otra cuenta bancaria también se sincroniza con esta cuenta de Wealthfolio.',
-    lastSync: 'Última sincronización:',
     retryFrom: 'Se vuelve a revisar desde el {{date}}',
     importFrom: 'Importar desde',
+    importsFrom: 'Importa desde el {{date}}',
     chooseStart:
       'Elige el día siguiente al último movimiento que ya tengas en esta cuenta de Wealthfolio (por ejemplo, de un CSV) para no duplicarlo. Si está vacía, la fecha desde la que quieras historial.',
     historyHint:
@@ -107,6 +107,7 @@ export const es = {
       'Puede haber movimientos duplicados con un CSV (fecha de inicio solapada), faltar historial anterior a la fecha de inicio, haber movimientos pendientes o rechazados, o Wealthfolio no haber terminado de recalcular.',
     balanceAvailableOnly: 'El banco solo da saldo disponible, que puede incluir crédito o retenciones.',
     balanceCurrencies: 'Divisas distintas: no se compara.',
+    collapsedSummary: '{{banks}} banco(s) · {{accounts}} cuenta(s) sincronizada(s)',
   },
   syncCard: {
     title: 'Sincronización',
@@ -117,6 +118,11 @@ export const es = {
       'Conecta un banco y asigna al menos una de sus cuentas a una cuenta de Wealthfolio para poder sincronizar.',
     failedTitle: 'No se pudo sincronizar',
     lastSync: 'Última sincronización: {{when}}',
+    lastGoodSync: 'Última sincronización correcta: {{when}}',
+    collapsedSummary: 'Última: {{when}} · {{n}} nuevo(s)',
+    toCheck: '{{n}} cuenta(s) por revisar',
+    notSyncedYet: 'Todavía no se ha sincronizado.',
+    needsStartDate: 'Elige desde qué fecha importar en «Bancos conectados».',
     newCount: '{{n}} nuevo(s)',
     duplicateCount: '{{n}} ya importado(s)',
     transferCount: '{{n}} traspaso(s) entre tus cuentas',

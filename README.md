@@ -49,7 +49,7 @@ must create **their own** application: its terms do not allow giving access to o
 
 ## 2. Install the add-on
 
-Download `wealthfolio-enable-banking-sync-addon-1.5.1.zip` from the *Releases* page. In
+Download `wealthfolio-enable-banking-sync-addon-1.5.2.zip` from the *Releases* page. In
 Wealthfolio, go to **Settings → Add-ons**, press **Install from file** and select the zip.
 
 > **Important:** in the permissions dialog, under **Network hosts**, tick
@@ -88,8 +88,14 @@ Wealthfolio*, click the **eye** icon ("View permissions"), tick `api.enablebanki
    *Cash* (or *Credit Card*) account in Wealthfolio for each bank account first. Also choose the
    date to import from the first time: there is no default and, until you choose it, that
    account is not synced (see below).
-4. Press **Sync now**. You will see how many transactions were downloaded, how many were new and
-   how many were already there.
+4. Press **Sync now**. The *Sync* card lists every synced account with what happened to it: how
+   many transactions were downloaded, how many were new and how many were already there, its
+   warnings, the history the bank gave and the balance check. *Connected banks* is only for
+   setting things up.
+
+Every card folds from its title to take less room, and the add-on remembers how you left it. A
+folded card opens by itself when it needs you (an error, a balance that does not match, a consent
+about to expire, a start date to choose), and *Sync* always opens when you sync.
 
 When the consent expires (usually after 90 to 180 days, depending on the bank), press **Renew**
 on that bank and authorize again. Account pairings and history are kept.
@@ -142,7 +148,7 @@ account:
   to the **next day**. If the account is empty, the date you want history from.
 - Until you choose the date, that account is not synced (status *Check date*).
 - If you get it wrong and something is duplicated, the Wealthfolio balance will not match the
-  bank's and you will see it in *Connected banks*.
+  bank's and you will see it in the *Sync* card.
 - Conversely, a transaction the bank booked on the last day of the CSV after you downloaded it
   will be in neither: the balance reveals that too.
 
@@ -157,7 +163,7 @@ do it in a Wealthfolio account other than those the add-on syncs.
 ## Balance check
 
 Every sync reads each account's balance (at most once a day, because of the PSD2 request limit),
-preferring the booked balance. *Connected banks* shows the bank's balance next to Wealthfolio's
+preferring the booked balance. The *Sync* card shows the bank's balance next to Wealthfolio's
 and whether they **match**. A difference usually means missing history before the start date,
 pending or rejected transactions, or that Wealthfolio has not finished recalculating. For credit
 cards the bank may report the debt as positive; this shows as "matches (the bank shows it with
@@ -179,7 +185,7 @@ list. So:
 - The first sync of each account, and any sync that starts more than 90 days ago, asks Enable
   Banking for the **longest** history the bank keeps from your start date (`strategy=longest`).
   That way whatever exists gets in, instead of nothing.
-- The report and *Connected banks* say from which date the bank gave transactions and from when
+- The *Sync* card says, for each account, from which date the bank gave transactions and from when
   you asked.
 - If the bank returns no transactions at all, the account is **not** marked as synced (status
   *Check date*): the next sync tries again from the same date.

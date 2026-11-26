@@ -157,6 +157,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       // Wealthfolio account and the masked IBAN to tell them apart.
       const wealthfolioAccount = accountNames.get(account.wealthfolioAccountId);
       const result: SyncAccountResult = {
+        key: account.key,
         bank,
         account: account.name,
         wealthfolioAccount,
