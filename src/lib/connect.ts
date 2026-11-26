@@ -124,6 +124,7 @@ export async function completeBankAuthorization(
           lastSyncedAt: old.lastSyncedAt,
           retryFrom: old.retryFrom,
           bankBalance: old.bankBalance,
+          pendingNotes: old.pendingNotes,
         }
       : fresh;
   });

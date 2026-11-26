@@ -115,6 +115,16 @@ export function buildComment(tx: EbTransaction, labels: TransferLabels = DEFAULT
 
 const INTEREST_PATTERN = /\b(inter[eé]s(es)?|interest)\b/iu;
 
+/**
+ * A movement booked without the other party's name (shop, payer or payee). BBVA
+ * can add it, and complete the description, days later: "PAGO CON TARJETA EN
+ * SUPERMERCADOS" gets the shop's name, and a payroll read the same day came as
+ * "ABONO DE NOMINA… // EMPRESA SEGUROS SOCIEDA" with no payer.
+ */
+export function isUnnamedMovement(tx: EbTransaction): boolean {
+  return !counterpartyName(tx);
+}
+
 export interface MappingOptions {
   wealthfolioAccountId: string;
   /** IBAN of the bank account being synced. */
@@ -126,6 +136,11 @@ export interface MappingOptions {
   detectInterest: boolean;
   /** Words for a transfer with no description (default: Spanish). */
   transferLabels?: TransferLabels;
+  /**
+   * List the movements that come without the other party's name in `unnamed`, so
+   * their note can be rewritten if the bank sends the name later.
+   */
+  findUnnamed?: boolean;
 }
 
 export function classify(
@@ -158,6 +173,11 @@ export interface SkippedTransaction {
 export interface MappedTransactions {
   rows: ActivityImport[];
   skipped: SkippedTransaction[];
+  /**
+   * `sourceRecordId` of the movements still without the other party's name (only
+   * with `findUnnamed`). Their note is the bank's description.
+   */
+  unnamed: Set<string>;
 }
 
 /**
@@ -174,6 +194,7 @@ export async function mapTransactions(
 ): Promise<MappedTransactions> {
   const rows: ActivityImport[] = [];
   const skipped: SkippedTransaction[] = [];
+  const unnamed = new Set<string>();
   const occurrences = new Map<string, number>();
 
   for (const tx of transactions) {
@@ -248,8 +269,9 @@ export async function mapTransactions(
       isDraft: false,
     };
     if (isExternal !== undefined) row.isExternal = isExternal;
+    if (options.findUnnamed && isUnnamedMovement(tx)) unnamed.add(sourceRecordId);
     rows.push(row);
   }
 
-  return { rows, skipped };
+  return { rows, skipped, unnamed };
 }

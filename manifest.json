@@ -1,7 +1,7 @@
 {
   "id": "enable-banking-sync",
   "name": "Enable Banking Sync for Wealthfolio",
-  "version": "1.5.2",
+  "version": "1.8.1",
   "description": "Sync your bank account transactions with one click through Enable Banking (PSD2)",
   "author": "Abel Marin",
   "main": "dist/addon.js",
@@ -53,9 +53,10 @@
       "category": "activities",
       "functions": [
         "checkImport",
-        "import"
+        "import",
+        "update"
       ],
-      "purpose": "Validate and import the transactions downloaded from the bank, without duplicating the ones already imported"
+      "purpose": "Validate and import the transactions downloaded from the bank, without duplicating the ones already imported, and put the other party's name (shop, payer or payee) in the note of a transaction it imported without it, if the bank sends it later"
     },
     {
       "category": "portfolio",

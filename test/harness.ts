@@ -165,7 +165,7 @@ export class FakeEnableBanking {
 
 /**
  * In-memory Wealthfolio activities store with sourceRecordId duplicate detection.
- * It offers only checkImport and import, the two functions the manifest declares:
+ * It offers only checkImport, import and update, the functions the manifest declares:
  * calling anything else (e.g. search) fails the test.
  */
 export class FakeActivities {
@@ -179,6 +179,12 @@ export class FakeActivities {
 
   /** Makes the next checkImport call fail as a whole, like a host error. */
   failCheckCall = false;
+
+  /** Calls to update, in order. */
+  updates: Array<Record<string, unknown>> = [];
+  /** Makes update fail, like Wealthfolio refusing a change. */
+  failUpdate = false;
+  private nextId = 1;
 
   /**
    * Wealthfolio deserializes each row into a Rust struct whose `date`, `symbol`,
@@ -198,8 +204,13 @@ export class FakeActivities {
     }
   }
 
+  /** Like Wealthfolio 3.13.1: an add-on row matches the activity it imported with the same ID into the same account. */
+  private existing(row: ActivityImport) {
+    return this.stored.find((s) => s.accountId === row.accountId && s.sourceRecordId === row.sourceRecordId);
+  }
+
   private isDuplicate(row: ActivityImport) {
-    return this.stored.some((s) => s.accountId === row.accountId && s.sourceRecordId === row.sourceRecordId);
+    return Boolean(this.existing(row));
   }
 
   checkImport = async (rows: ActivityImport[]) => {
@@ -207,7 +218,8 @@ export class FakeActivities {
     if (this.failCheckCall) throw hostError('database is locked');
     return rows.map((row) => {
       if (this.rejectInCheck(row)) return { ...row, isValid: false, errors: { amount: ['rechazado'] } };
-      return this.isDuplicate(row) ? { ...row, duplicateOfId: 'existing' } : { ...row };
+      const existing = this.existing(row);
+      return existing ? { ...row, duplicateOfId: existing.id } : { ...row };
     });
   };
 
@@ -223,9 +235,12 @@ export class FakeActivities {
     }
     const outcome = rows.map((r) => {
       if (this.rejectInImport(r)) return { ...r, isValid: false, errors: { date: ['fuera de rango'] } };
-      if (this.isDuplicate(r)) return { ...r, duplicateOfId: 'existing' };
-      this.stored.push(r);
-      return r;
+      const existing = this.existing(r);
+      if (existing) return { ...r, duplicateOfId: existing.id };
+      const n = this.nextId++;
+      this.stored.push({ ...r, id: `act-${n}` });
+      // Like Wealthfolio 3.13.1: the result carries an id that is not the stored activity's.
+      return { ...r, id: `import-${n}` };
     });
     return {
       activities: outcome,
@@ -239,6 +254,18 @@ export class FakeActivities {
         success: true,
       },
     };
+  };
+
+  update = async (activity: Record<string, unknown>) => {
+    this.updates.push(activity);
+    for (const field of ['id', 'accountId', 'activityType', 'activityDate']) {
+      if (typeof activity[field] !== 'string') throw hostError(`missing field \`${field}\``);
+    }
+    if (this.failUpdate) throw hostError('Cannot change the type of a linked transfer leg');
+    const row = this.stored.find((s) => s.id === activity.id);
+    if (!row) throw hostError('Activity not found');
+    if (typeof activity.comment === 'string') row.comment = activity.comment;
+    return row;
   };
 }
 
@@ -272,7 +299,11 @@ export function createHarness(): Harness {
       getAll: async () =>
         Object.entries(accountTypes).map(([id, accountType]) => ({ id, accountType, currency: 'EUR', name: id })),
     },
-    activities: { checkImport: activities.checkImport, import: activities.import } as unknown as SyncHost['activities'],
+    activities: {
+      checkImport: activities.checkImport,
+      import: activities.import,
+      update: activities.update,
+    } as unknown as SyncHost['activities'],
   } as unknown as SyncHost;
   return { secrets, bank, activities, accountTypes, host };
 }

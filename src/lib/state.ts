@@ -64,6 +64,28 @@ export interface LinkedAccount {
    * returned none).
    */
   history?: { requestedFrom: string; earliest?: string; checkedAt: string };
+  /**
+   * Movements imported in the last NAME_WAIT_DAYS days without the other party's
+   * name (shop, payer or payee; their note is the bank's description), by
+   * `sourceRecordId`. Transfers between your accounts are left out. If the bank
+   * sends the name in that time the note is rewritten with it in front; then, or
+   * when the time is over, the entry goes. Absent when none.
+   */
+  pendingNotes?: Record<string, PendingNote>;
+}
+
+export interface PendingNote {
+  /** Date of the movement (YYYY-MM-DD). */
+  date: string;
+  /** Activity type it was imported with (Wealthfolio needs it to update the note). */
+  activityType: string;
+  currency: string;
+  /** Absolute amount, for messages. */
+  amount: string;
+  // No kind of movement: card payments and the rest are treated alike (1.8.0 kept
+  // one; the next sync drops it).
+  // No activity id: the import result does not carry the stored one (1.7.0 kept a
+  // wrong one). The sync that sees the name learns it from Wealthfolio's validation.
 }
 
 export interface BankConnection {
@@ -111,6 +133,12 @@ export interface SyncAccountResult {
   invalid: number;
   /** Pending movements left for a later sync. */
   pending?: number;
+  /** Movements still without the other party's name that may get it (after this sync). */
+  notesWaiting?: number;
+  /** Notes rewritten in this sync with the other party's name. */
+  notesWritten?: number;
+  /** Movements that stay without the other party's name: the wait ended in this sync. */
+  notesWithoutName?: number;
   /** Movements paired as internal transfers by amount and date (no IBAN). */
   ownTransfers?: number;
   dateFrom?: string;

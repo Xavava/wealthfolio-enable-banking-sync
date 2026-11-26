@@ -49,7 +49,7 @@ must create **their own** application: its terms do not allow giving access to o
 
 ## 2. Install the add-on
 
-Download `wealthfolio-enable-banking-sync-addon-1.5.2.zip` from the *Releases* page. In
+Download `wealthfolio-enable-banking-sync-addon-1.8.1.zip` from the *Releases* page. In
 Wealthfolio, go to **Settings → Add-ons**, press **Install from file** and select the zip.
 
 > **Important:** in the permissions dialog, under **Network hosts**, tick
@@ -61,7 +61,7 @@ The permissions it asks for:
 | Permission | What for |
 | --- | --- |
 | Accounts (`getAll`) | List your Wealthfolio accounts to pair them with the bank's |
-| Activities (`checkImport`, `import`) | Validate and import transactions (it cannot read, edit or delete the ones you already have) |
+| Activities (`checkImport`, `import`, `update`) | Validate and import transactions, and put the shop's, payer's or payee's name in the note of a transaction it imported without it. It cannot read or delete the ones you already have; `update` is only used for that note |
 | Portfolio (`getLatestValuations`) | Read each account's balance in Wealthfolio to compare it with the bank's |
 | Secrets | Store the private key and the short-lived access token encrypted |
 | Network (`api.enablebanking.com`) | Talk to Enable Banking |
@@ -110,6 +110,7 @@ on that bank and authorize again. Account pairings and history are kept.
 | Debit/credit to another of your synced accounts (same IBAN) | `TRANSFER_OUT` / `TRANSFER_IN` (internal) |
 | Debit in one account and a credit of the same amount in another of yours, without IBAN (optional) | `TRANSFER_OUT` / `TRANSFER_IN` (internal), see below |
 | Pending transaction (`PDNG`) | Not imported until the bank books it |
+| Transaction booked without the shop's, payer's or payee's name ("PAGO CON TARJETA EN …", a payroll read the same day), except transfers between your accounts | Imported at once with the bank's description; if the name arrives within 14 days, it is put in front in the note |
 
 Each activity's comment carries the counterparty and the description (`MERCADONA · COMPRA TARJ.
 1234`). The bank's details (reference, booking and value dates, transaction code) are kept in the
@@ -117,6 +118,17 @@ activity's metadata.
 
 Every sync reads again the 7 days before the last one, to pick up transactions the bank books
 late. Those already imported are skipped automatically.
+
+Some banks book a transaction before they send the other party's name: BBVA first sends "PAGO
+CON TARJETA EN SUPERMERCADOS" and adds the shop's name days later (it has taken up to 12), and a
+payroll read the same day comes without the payer and with a cut description. Such transactions
+are imported at once with the bank's description, so the balance matches the bank's. If a sync in
+the next 14 days receives the name, the add-on rewrites the note with what the bank sends then,
+like the rest (`MERCADONA · PAGO CON TARJETA EN …`); after that it leaves it as it is and the
+report says so. Transfers between your accounts (such as round-ups) never get a name and are not
+waited for. The add-on keeps a short list of these transactions for those 14 days and reads their
+dates again. It only changes the note of the transactions it imported itself: if
+you edit the note of one in those days or change its type, the add-on overwrites them.
 
 If a transaction was left **pending** or **rejected by Wealthfolio**, the next sync starts at its
 date, even if older, until it gets in. After 89 days it is no longer retried (banks rarely give
@@ -235,7 +247,7 @@ Structure:
   `auth.secretKey`.
 - `src/lib/connect.ts`: bank authorization (`/auth` → `/sessions`) and renewal.
 - `src/lib/mapping.ts`: conversion of transactions to `ActivityImport`.
-- `src/lib/sync.ts`: download, `checkImport` and `import`, holding back pending and rejected
+- `src/lib/sync.ts`: download, `checkImport`, `import` and `update` (notes of transactions booked without a name), holding back pending and rejected
   transactions.
 - `src/lib/transfers.ts`: pairing of transfers without IBAN.
 - `src/lib/balance.ts`: choosing and comparing the balance.

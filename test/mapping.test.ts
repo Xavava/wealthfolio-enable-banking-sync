@@ -173,3 +173,26 @@ describe('buildComment fallbacks', () => {
     );
   });
 });
+
+describe('movements the bank names later (BBVA)', () => {
+  const card = tx({ entry_reference: 'K1', remittance_information: ['PAGO CON TARJETA EN SUPERMERCADOS'] });
+  const payroll = tx({
+    entry_reference: 'N1',
+    credit_debit_indicator: 'CRDT',
+    remittance_information: ['ABONO DE NOMINA POR TRANSFERENCIA // INGRESO POR NÓMINA O PENSIÓN'],
+  });
+
+  it('lists every movement without the other party name, keeping the note the bank gives', async () => {
+    const namedCard = { ...card, entry_reference: 'K2', creditor: { name: 'MERCADONA' } };
+    const namedPayroll = { ...payroll, entry_reference: 'N2', debtor: { name: 'ACME SEGUROS SA' } };
+    const mapped = await mapTransactions([card, namedCard, payroll, namedPayroll], { ...baseOptions, findUnnamed: true });
+    expect(mapped.rows.map((r) => r.comment)).toEqual([
+      'PAGO CON TARJETA EN SUPERMERCADOS',
+      'MERCADONA · PAGO CON TARJETA EN SUPERMERCADOS',
+      'ABONO DE NOMINA POR TRANSFERENCIA // INGRESO POR NÓMINA O PENSIÓN',
+      'ACME SEGUROS SA · ABONO DE NOMINA POR TRANSFERENCIA // INGRESO POR NÓMINA O PENSIÓN',
+    ]);
+    expect([...mapped.unnamed]).toEqual(['ref:K1|2026-11-03|-10.00', 'ref:N1|2026-11-03|10.00']);
+    expect((await mapTransactions([card, payroll], baseOptions)).unnamed.size).toBe(0);
+  });
+});

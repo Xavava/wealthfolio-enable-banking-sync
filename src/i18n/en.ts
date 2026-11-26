@@ -167,6 +167,15 @@ export const en: Translations = {
     heldTooOld:
       'There are pending or rejected transactions from {{holdDate}} that will not be checked again (more than {{days}} days). Review them manually.',
     pendingNote: '{{n}} pending transaction(s): they will be imported when the bank books them.',
+    notesWaitingNote:
+      "{{n}} transaction(s) still without the shop's, payer's or payee's name: if the bank sends it within {{days}} days of their date, it will be put in front in the note.",
+    notesWrittenNote: '{{n}} note(s) updated with the name in front.',
+    notesWithoutNameNote:
+      "{{n}} transaction(s) stay without the shop's, payer's or payee's name, because the bank did not send it within {{days}} days: {{list}}.",
+    noteUpdateFailed:
+      'Could not write the note of the transaction of {{paymentDate}} ({{amount}}): {{detail}}. It will be retried.',
+    notesGivenUpNote:
+      'Could not write the note of {{n}} transaction(s) and gave up: {{list}}. Write it by hand if you want it.',
     rejectedNote: '{{n}} transaction(s) rejected by Wealthfolio: they will be retried on the next sync.',
     ownTransfersNote: '{{n}} transaction(s) recorded as transfers between your accounts.',
     transferFrom: 'Transfer from',

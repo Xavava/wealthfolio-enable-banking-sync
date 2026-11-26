@@ -255,6 +255,7 @@ export function ConnectionsCard({
       lastSyncedDate: undefined,
       lastSyncedAt: undefined,
       retryFrom: undefined,
+      pendingNotes: undefined,
     });
   };
 

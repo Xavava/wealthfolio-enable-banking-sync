@@ -11,6 +11,8 @@ import { mapTransactions, maskIban, pendingDate, transactionDate, type TransferL
 import { errorToText, msg, type Text } from './messages';
 import {
   addDays,
+  daysBetween,
+  formatIsoDate,
   isExpired,
   isValidStartDate,
   MIN_START_DATE,
@@ -21,6 +23,7 @@ import {
   type BankConnection,
   type InvalidRowInfo,
   type LinkedAccount,
+  type PendingNote,
   type SyncAccountResult,
   type SyncReport,
 } from './state';
@@ -35,6 +38,19 @@ export const OVERLAP_DAYS = 7;
  * with a warning instead of anchoring every later sync.
  */
 export const MAX_RETRY_DAYS = 89;
+
+/**
+ * Days during which a movement imported without the other party's name gets its
+ * note rewritten if the bank sends the name (BBVA has taken up to 12 with card
+ * payments). After that it keeps the bank's description and the report says so.
+ */
+export const NAME_WAIT_DAYS = 14;
+
+/**
+ * Days after which a note that could not be written is given up, with a warning
+ * (e.g. the movement was deleted, or its type changed and Wealthfolio refuses it).
+ */
+export const NOTE_GIVE_UP_DAYS = 30;
 
 export type SyncHost = Pick<HostAPI, 'network' | 'secrets' | 'activities' | 'accounts'>;
 
@@ -110,6 +126,104 @@ interface AccountWork {
   freshRows: number;
   /** Do not mark the account as synced (first sync where the bank returned nothing). */
   keepWindow: boolean;
+  /** Movements still without the other party's name in this download. */
+  unnamed: Set<string>;
+  /** Notes still to write (the account's list, updated by this sync). */
+  pending: Record<string, PendingNote>;
+  /** Pending payments read again and already in Wealthfolio → their row now and activity. */
+  seen: Map<string, { comment: string; activityId?: string }>;
+}
+
+/** The saved list, with only the fields this version keeps (1.7.0 also saved a wrong activity id). */
+function keptNotes(saved: Record<string, PendingNote> | undefined): Record<string, PendingNote> {
+  return Object.fromEntries(
+    Object.entries(saved ?? {}).map(([ref, n]) => [
+      ref,
+      { date: n.date, activityType: n.activityType, currency: n.currency, amount: n.amount },
+    ]),
+  );
+}
+
+function paymentList(notes: PendingNote[]): string {
+  const shown = notes.slice(0, 5).map((n) => `${formatIsoDate(n.date)} ${n.amount} ${n.currency}`.trim());
+  if (notes.length > shown.length) shown.push('…');
+  return shown.join(', ');
+}
+
+/**
+ * Rewrites the note of movements imported without the other party's name once the
+ * bank sends it, within NAME_WAIT_DAYS. Only touches activities the add-on
+ * imported itself, and only their note.
+ */
+async function writePendingNotes(host: SyncHost, entry: AccountWork, today: string): Promise<void> {
+  const { account, result } = entry;
+  const written: PendingNote[] = [];
+  const withoutName: PendingNote[] = [];
+  const givenUp: PendingNote[] = [];
+  for (const [ref, note] of Object.entries(entry.pending)) {
+    const age = daysBetween(note.date, today);
+    const seen = entry.seen.get(ref);
+    const named = seen !== undefined && !entry.unnamed.has(ref);
+    if (!named) {
+      // Still without the name: wait, or leave the bank's description for good.
+      if (age >= NAME_WAIT_DAYS) {
+        withoutName.push(note);
+        delete entry.pending[ref];
+      }
+      continue;
+    }
+    const text = seen.comment;
+    const activityId = seen.activityId;
+    if (!activityId || !account.wealthfolioAccountId) {
+      // Wealthfolio did not say which activity it is: a later sync that reads it again may.
+      if (age >= NOTE_GIVE_UP_DAYS) {
+        givenUp.push(note);
+        delete entry.pending[ref];
+      }
+      continue;
+    }
+    try {
+      await host.activities.update({
+        id: activityId,
+        accountId: account.wealthfolioAccountId,
+        activityType: note.activityType,
+        // As Wealthfolio stores imported dates (midnight UTC), so the date never moves.
+        activityDate: `${note.date}T00:00:00+00:00`,
+        currency: note.currency,
+        comment: text,
+      });
+      written.push(note);
+      delete entry.pending[ref];
+    } catch (error) {
+      if (age >= NOTE_GIVE_UP_DAYS) {
+        givenUp.push(note);
+        delete entry.pending[ref];
+      } else {
+        result.notes!.push(
+          msg('sync.noteUpdateFailed', {
+            paymentDate: note.date,
+            amount: `${note.amount} ${note.currency}`.trim(),
+            detail: errorToText(error),
+          }),
+        );
+      }
+    }
+  }
+  result.notesWritten = written.length;
+  result.notesWithoutName = withoutName.length;
+  result.notesWaiting = Object.keys(entry.pending).length;
+  if (written.length > 0) result.notes!.push(msg('sync.notesWrittenNote', { n: written.length }));
+  if (withoutName.length > 0) {
+    result.notes!.push(
+      msg('sync.notesWithoutNameNote', { n: withoutName.length, days: NAME_WAIT_DAYS, list: paymentList(withoutName) }),
+    );
+  }
+  if (givenUp.length > 0) {
+    result.notes!.push(msg('sync.notesGivenUpNote', { n: givenUp.length, list: paymentList(givenUp) }));
+  }
+  if (result.notesWaiting > 0) {
+    result.notes!.push(msg('sync.notesWaitingNote', { n: result.notesWaiting, days: NAME_WAIT_DAYS }));
+  }
 }
 
 interface FreshRow {
@@ -242,11 +356,23 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
           bankName: bank,
           detectInterest: options.detectInterest ?? true,
           transferLabels: options.transferLabels,
+          findUnnamed: true,
         });
         const pending = mapped.skipped.filter((s) => s.reason === 'pending');
         result.pending = pending.length;
         const holdDates = pending.map((s) => pendingDate(s.tx) ?? dateFrom);
-        work.push({ account, result, rows: mapped.rows, holdDates, freshRows: 0, keepWindow });
+        work.push({
+          account,
+          result,
+          rows: mapped.rows,
+          holdDates,
+          freshRows: 0,
+          keepWindow,
+          unnamed: mapped.unnamed,
+          // A new start (another Wealthfolio account) starts without pending notes.
+          pending: account.lastSyncedDate ? keptNotes(account.pendingNotes) : {},
+          seen: new Map(),
+        });
       } catch (error) {
         if (error instanceof NetworkBlockedError) networkBlocked = true;
         result.status =
@@ -313,8 +439,14 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       const owner = owners[line - 1] ?? owners[index];
       const original = allRows[line - 1] ?? row;
       if (isInvalidRow(row)) recordInvalid(owner, original, rowErrors(row));
-      else if (isDuplicateRow(row)) owner.result.duplicates += 1;
-      else fresh.push({ row, original, work: owner });
+      else if (isDuplicateRow(row)) {
+        owner.result.duplicates += 1;
+        // A payment whose note is pending: Wealthfolio says which activity it is.
+        const ref = original.sourceRecordId ?? '';
+        if (owner.pending[ref]) {
+          owner.seen.set(ref, { comment: original.comment ?? '', activityId: row.duplicateOfId || undefined });
+        }
+      } else fresh.push({ row, original, work: owner });
     });
 
     // 2b. Withdrawal + deposit between two of your accounts without an IBAN → transfer.
@@ -364,7 +496,23 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
               result.activities?.[index];
             if (outcome && isDuplicateRow(outcome)) f.work.result.duplicates += 1;
             else if (outcome && isInvalidRow(outcome)) recordInvalid(f.work, f.original, rowErrors(outcome));
-            else f.work.result.imported += 1;
+            else {
+              f.work.result.imported += 1;
+              const ref = f.original.sourceRecordId ?? '';
+              const date = String(f.row.date ?? '').slice(0, 10);
+              // Transfers between your accounts never get a name, and they are linked in pairs.
+              const transfer = f.row.activityType === 'TRANSFER_IN' || f.row.activityType === 'TRANSFER_OUT';
+              if (f.work.unnamed.has(ref) && !transfer && date >= addDays(today, -(NAME_WAIT_DAYS - 1))) {
+                f.work.pending[ref] = {
+                  date,
+                  activityType: f.row.activityType,
+                  currency: f.row.currency ?? '',
+                  amount: String(f.row.amount ?? ''),
+                };
+              } else {
+                delete f.work.pending[ref];
+              }
+            }
           });
         } else {
           importSucceeded = false;
@@ -393,8 +541,16 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
     if (entry.keepWindow) continue;
     account.lastSyncedDate = today;
     account.lastSyncedAt = new Date().toISOString();
+    // Left by the personal 1.6.0, which held these payments back instead.
+    delete (account as LinkedAccount & { awaitingName?: unknown }).awaitingName;
 
-    const hold = minDate(entry.holdDates);
+    await writePendingNotes(host, entry, today);
+    if (Object.keys(entry.pending).length > 0) account.pendingNotes = entry.pending;
+    else delete account.pendingNotes;
+
+    // Read again what is pending, rejected or may still get the shop's name.
+    const noteDates = Object.values(entry.pending).map((note) => note.date);
+    const hold = minDate([...entry.holdDates, ...noteDates]);
     if (!hold) {
       delete account.retryFrom;
     } else if (hold < oldestRetry) {

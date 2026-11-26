@@ -51,7 +51,7 @@ persona tiene que crear **su propia** aplicación: sus condiciones no permiten d
 
 ## 2. Instala el add-on
 
-Descarga `wealthfolio-enable-banking-sync-addon-1.5.2.zip` de la página de versiones
+Descarga `wealthfolio-enable-banking-sync-addon-1.8.1.zip` de la página de versiones
 (*Releases*). En Wealthfolio, ve a **Ajustes → Complementos**, pulsa **Instalar desde archivo**
 y selecciona el zip.
 
@@ -65,7 +65,7 @@ Los permisos que pide:
 | Permiso | Para qué |
 | --- | --- |
 | Cuentas (`getAll`) | Listar tus cuentas de Wealthfolio para asociarlas con las del banco |
-| Actividades (`checkImport`, `import`) | Validar e importar los movimientos (no puede leer, editar ni borrar los que ya tienes) |
+| Actividades (`checkImport`, `import`, `update`) | Validar e importar los movimientos, y poner el nombre del comercio, ordenante o beneficiario en la nota de un movimiento que importó sin él. No puede leer ni borrar los que ya tienes; `update` solo se usa para esa nota |
 | Cartera (`getLatestValuations`) | Leer el saldo de cada cuenta en Wealthfolio para compararlo con el del banco |
 | Secretos | Guardar cifrada la clave privada y el token temporal de acceso |
 | Red (`api.enablebanking.com`) | Hablar con Enable Banking |
@@ -116,6 +116,7 @@ historial.
 | Cargo/abono hacia otra cuenta tuya sincronizada (mismo IBAN) | `TRANSFER_OUT` / `TRANSFER_IN` (internas) |
 | Cargo en una cuenta y abono del mismo importe en otra tuya, sin IBAN (desactivable) | `TRANSFER_OUT` / `TRANSFER_IN` (internas), ver abajo |
 | Movimiento pendiente (`PDNG`) | No se importa hasta que el banco lo contabilice |
+| Movimiento contabilizado sin el nombre del comercio, ordenante o beneficiario («PAGO CON TARJETA EN …», una nómina leída el mismo día), salvo traspasos entre tus cuentas | Se importa enseguida con el concepto del banco; si el nombre llega en 14 días, se pone delante en la nota |
 
 El comentario de cada actividad lleva la contraparte y el concepto (`MERCADONA · COMPRA TARJ.
 1234`). Los detalles del banco (referencia, fechas de contabilización y valor, código de
@@ -123,6 +124,18 @@ operación) se guardan en los metadatos de la actividad.
 
 En cada sincronización se vuelven a leer los 7 días anteriores a la última, para recoger
 movimientos que el banco contabiliza tarde. Los ya importados se saltan solos.
+
+Algunos bancos contabilizan un movimiento antes de mandar el nombre de la otra parte: BBVA manda
+primero «PAGO CON TARJETA EN SUPERMERCADOS» y añade el nombre del comercio días después (hasta
+12, que se haya visto), y una nómina leída el mismo día llega sin el ordenante y con el concepto
+cortado. Esos movimientos se importan enseguida con el concepto del banco, para que el saldo
+cuadre con el del banco. Si una sincronización de los 14 días siguientes recibe el nombre, el
+add-on reescribe la nota con lo que mande entonces el banco, como el resto (`MERCADONA · PAGO CON
+TARJETA EN …`); pasado ese plazo la deja como está y el informe lo indica. Los traspasos entre
+tus cuentas (como los redondeos) nunca traen nombre y no se esperan. El add-on guarda una lista
+corta de esos movimientos durante esos 14 días y vuelve a leer sus fechas. Solo cambia la nota de
+los movimientos que importó él: si en esos días editas la nota de uno o le cambias el tipo, el
+add-on lo sobrescribe.
 
 Si quedó algún movimiento **pendiente** o **rechazado por Wealthfolio**, la siguiente
 sincronización empieza en su fecha, aunque sea más antigua, hasta que entre. Pasados 89 días
@@ -239,7 +252,7 @@ Estructura:
   envía con `auth.secretKey`.
 - `src/lib/connect.ts`: autorización del banco (`/auth` → `/sessions`) y renovación.
 - `src/lib/mapping.ts`: conversión de movimientos a `ActivityImport`.
-- `src/lib/sync.ts`: descarga, `checkImport` e `import`, retención de pendientes y rechazados.
+- `src/lib/sync.ts`: descarga, `checkImport`, `import` y `update` (notas de movimientos sin nombre), retención de pendientes y rechazados.
 - `src/lib/transfers.ts`: emparejado de traspasos sin IBAN.
 - `src/lib/balance.ts`: elección y comparación del saldo.
 - `src/lib/messages.ts`: mensajes traducibles del código que no es de React.

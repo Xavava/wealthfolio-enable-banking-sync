@@ -1,7 +1,8 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EnableBankingClient, NetworkBlockedError, PRIVATE_KEY_SECRET } from '../src/lib/enable-banking-client';
-import { runSync } from '../src/lib/sync';
+import { mapTransactions } from '../src/lib/mapping';
+import { NAME_WAIT_DAYS, runSync } from '../src/lib/sync';
 import {
   APP_ID,
   IBAN_CHECKING,
@@ -79,7 +80,9 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
     expect(checkingQuery.get('date_from')).toBe('2026-11-10');
     expect(checkingQuery.get('date_to')).toBe('2026-11-21');
     expect(checkingQuery.get('strategy')).toBeNull();
-    expect(h.bank.transactionRequests('savings')[0].query.get('date_from')).toBe('2026-11-13');
+    // The interest (2026-11-10) came without a payer's name: it waits for it, so its
+    // date is read again instead of only a week back.
+    expect(h.bank.transactionRequests('savings')[0].query.get('date_from')).toBe('2026-11-10');
   });
 
   it('keeps account mappings and history when the bank is reconnected', async () => {
@@ -143,9 +146,10 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
 
 describe('movements are never lost', () => {
   it('re-reads a movement Wealthfolio rejected until it is imported, even weeks later', async () => {
+    // With names, so none waits for one (that would also hold the window).
     h.bank.transactions.checking = [
-      book({ entry_reference: 'OLD', booking_date: '2026-10-01', transaction_amount: { amount: '13.00', currency: 'EUR' } }),
-      book({ entry_reference: 'NEW', booking_date: '2026-11-19' }),
+      book({ entry_reference: 'OLD', booking_date: '2026-10-01', creditor: { name: 'SHOP' }, transaction_amount: { amount: '13.00', currency: 'EUR' } }),
+      book({ entry_reference: 'NEW', booking_date: '2026-11-19', creditor: { name: 'SHOP' } }),
     ];
     h.bank.transactions.savings = [];
     h.activities.rejectInCheck = (row) => row.amount === '13.00';
@@ -196,7 +200,7 @@ describe('movements are never lost', () => {
 
     // Booked a month later than it happened.
     h.bank.transactions.checking = [
-      book({ entry_reference: 'P', booking_date: '2026-11-21', transaction_date: '2026-10-20', transaction_amount: { amount: '42.00', currency: 'EUR' } }),
+      book({ entry_reference: 'P', booking_date: '2026-11-21', transaction_date: '2026-10-20', creditor: { name: 'SHOP' }, transaction_amount: { amount: '42.00', currency: 'EUR' } }),
     ];
     h.bank.requests = [];
     const second = await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-29T10:00:00') });
@@ -254,7 +258,7 @@ describe('first sync needs a start date chosen by the user', () => {
     expect(report.accounts.map((a) => a.status)).toEqual(['ok', 'ok']);
   });
 
-  it('never reads existing Wealthfolio movements (only checkImport and import)', async () => {
+  it('never reads existing Wealthfolio movements (only checkImport, import and update)', async () => {
     // The harness host has no activities.search: calling it would throw.
     const { connections: connected } = await connect(h.host);
     const { report } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
@@ -441,5 +445,277 @@ describe('bank balance', () => {
     expect(report.accounts[0].imported).toBe(3);
     expect(report.accounts[0].notes?.map(textEs).join(' ')).toMatch(/No se pudo leer el saldo/);
     expect(connections[0].accounts[0].bankBalance).toBeUndefined();
+  });
+});
+
+describe('card payments the bank names later', () => {
+  const cardPayment = (overrides: Parameters<typeof book>[0] = {}) =>
+    book({
+      entry_reference: 'CARD',
+      booking_date: '2026-11-19',
+      remittance_information: ['PAGO CON TARJETA EN SUPERMERCADOS'],
+      transaction_amount: { amount: '23.45', currency: 'EUR' },
+      ...overrides,
+    });
+  const notes = (r: { notes?: unknown[] }) => (r.notes ?? []).map((n) => textEs(n as Parameters<typeof textEs>[0])).join(' ');
+  const CONCEPT = 'PAGO CON TARJETA EN SUPERMERCADOS';
+  const NAMED = 'MERCADONA · PAGO CON TARJETA EN SUPERMERCADOS';
+
+  beforeEach(() => {
+    h.bank.transactions.savings = [];
+  });
+
+  it("imports it at once with the bank's description and puts the shop's name in front when it arrives", async () => {
+    h.bank.transactions.checking = [cardPayment()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(first.report.accounts[0]).toMatchObject({ imported: 1, notesWaiting: 1 });
+    expect(h.activities.stored.map((r) => r.comment)).toEqual([CONCEPT]);
+    expect(notes(first.report.accounts[0])).toMatch(
+      /1 movimiento\(s\) todavía sin el nombre del comercio, ordenante o beneficiario.*14 días/,
+    );
+    expect(first.connections[0].accounts[0]).toMatchObject({
+      retryFrom: '2026-11-19',
+      pendingNotes: {
+        'ref:CARD|2026-11-19|-23.45': { date: '2026-11-19', activityType: 'WITHDRAWAL', currency: 'EUR', amount: '23.45' },
+      },
+    });
+
+    // Renewing the consent keeps the list.
+    const { connections: renewed } = await connect(h.host, first.connections);
+    expect(renewed[0].accounts[0].pendingNotes).toEqual(first.connections[0].accounts[0].pendingNotes);
+
+    // Still no name: nothing changes.
+    const second = await runSync({ host: h.host, config, connections: renewed, now: new Date('2026-11-21T10:00:00') });
+    expect(h.activities.updates).toHaveLength(0);
+    expect(second.report.accounts[0]).toMatchObject({ imported: 0, duplicates: 1, notesWaiting: 1 });
+
+    h.bank.transactions.checking = [cardPayment({ creditor: { name: 'MERCADONA' } })];
+    const third = await runSync({ host: h.host, config, connections: second.connections, now: new Date('2026-11-23T10:00:00') });
+    expect(h.activities.updates).toEqual([
+      {
+        id: 'act-1',
+        accountId: 'wf-checking',
+        activityType: 'WITHDRAWAL',
+        activityDate: '2026-11-19T00:00:00+00:00',
+        currency: 'EUR',
+        comment: NAMED,
+      },
+    ]);
+    expect(h.activities.stored.map((r) => r.comment)).toEqual([NAMED]);
+    expect(third.report.accounts[0]).toMatchObject({ imported: 0, notesWritten: 1, notesWaiting: 0 });
+    expect(notes(third.report.accounts[0])).toMatch(/1 nota\(s\) actualizada\(s\) con el nombre delante/);
+    expect(third.connections[0].accounts[0].pendingNotes).toBeUndefined();
+    expect(third.connections[0].accounts[0].retryFrom).toBeUndefined();
+
+    // Updated once: later syncs leave it alone.
+    await runSync({ host: h.host, config, connections: third.connections, now: new Date('2026-11-24T10:00:00') });
+    expect(h.activities.updates).toHaveLength(1);
+  });
+
+  it(`leaves the bank's description after ${NAME_WAIT_DAYS} days without the name, and says so`, async () => {
+    h.bank.transactions.checking = [cardPayment({ booking_date: '2026-11-01' })];
+    const { connections: connected } = await connect(h.host);
+    const day13 = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-14T10:00:00') });
+    expect(day13.report.accounts[0]).toMatchObject({ imported: 1, notesWaiting: 1 });
+
+    const day14 = await runSync({ host: h.host, config, connections: day13.connections, now: new Date('2026-11-15T10:00:00') });
+    expect(h.bank.transactionRequests('checking').at(-1)?.query.get('date_from')).toBe('2026-11-01');
+    expect(h.activities.updates).toHaveLength(0);
+    expect(h.activities.stored.map((r) => r.comment)).toEqual([CONCEPT]);
+    expect(day14.report.accounts[0]).toMatchObject({ notesWithoutName: 1, notesWaiting: 0 });
+    expect(notes(day14.report.accounts[0])).toMatch(
+      /1 movimiento\(s\) se queda\(n\) sin el nombre del comercio, ordenante o beneficiario, porque el banco no lo ha mandado en 14 días: 01\/11\/2026 23\.45 EUR\./,
+    );
+    expect(day14.connections[0].accounts[0].pendingNotes).toBeUndefined();
+
+    // A name arriving later changes nothing.
+    h.bank.transactions.checking = [cardPayment({ booking_date: '2026-11-01', creditor: { name: 'MERCADONA' } })];
+    await runSync({ host: h.host, config, connections: day14.connections, now: new Date('2026-11-16T10:00:00') });
+    expect(h.activities.updates).toHaveLength(0);
+  });
+
+  it(`does not follow payments older than ${NAME_WAIT_DAYS} days`, async () => {
+    h.bank.transactions.checking = [cardPayment({ booking_date: '2026-10-01' })];
+    const { connections: connected } = await connect(h.host);
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(h.activities.stored.map((r) => r.comment)).toEqual([CONCEPT]);
+    expect(report.accounts[0]).toMatchObject({ imported: 1, notesWaiting: 0 });
+    expect(connections[0].accounts[0].pendingNotes).toBeUndefined();
+  });
+
+  it('updates the activity Wealthfolio names when validating, not the id the import returns', async () => {
+    h.bank.transactions.checking = [cardPayment()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(first.connections[0].accounts[0].pendingNotes?.['ref:CARD|2026-11-19|-23.45']).not.toHaveProperty('activityId');
+
+    h.bank.transactions.checking = [cardPayment({ creditor: { name: 'MERCADONA' } })];
+    await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-21T10:00:00') });
+    expect(h.activities.updates.map((u) => [u.id, u.comment])).toEqual([['act-1', NAMED]]);
+  });
+
+  it('drops the wrong activity id a list saved by 1.7.0 carries', async () => {
+    h.bank.transactions.checking = [cardPayment()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    const saved = first.connections.map((c) => ({
+      ...c,
+      accounts: c.accounts.map((a) => ({
+        ...a,
+        pendingNotes: a.pendingNotes && {
+          'ref:CARD|2026-11-19|-23.45': { ...a.pendingNotes['ref:CARD|2026-11-19|-23.45'], activityId: 'import-1' },
+        },
+      })),
+    }));
+
+    // Still no name: the list is saved again without the id.
+    const second = await runSync({ host: h.host, config, connections: saved, now: new Date('2026-11-21T10:00:00') });
+    expect(second.connections[0].accounts[0].pendingNotes?.['ref:CARD|2026-11-19|-23.45']).not.toHaveProperty('activityId');
+
+    h.bank.transactions.checking = [cardPayment({ creditor: { name: 'MERCADONA' } })];
+    const third = await runSync({ host: h.host, config, connections: saved, now: new Date('2026-11-21T10:00:00') });
+    expect(h.activities.updates.map((u) => u.id)).toEqual(['act-1']);
+    expect(third.report.accounts[0]).toMatchObject({ notesWritten: 1, notesWaiting: 0 });
+  });
+
+  it('retries when Wealthfolio refuses the change, says so and gives up after 30 days', async () => {
+    h.bank.transactions.checking = [cardPayment({ booking_date: '2026-11-10' })];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-12T10:00:00') });
+
+    h.activities.failUpdate = true;
+    h.bank.transactions.checking = [cardPayment({ booking_date: '2026-11-10', creditor: { name: 'MERCADONA' } })];
+    const refused = await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-13T10:00:00') });
+    expect(refused.report.accounts[0]).toMatchObject({ notesWritten: 0, notesWaiting: 1 });
+    expect(notes(refused.report.accounts[0])).toMatch(/No se pudo escribir la nota del movimiento del 10\/11\/2026 \(23\.45 EUR\).*Se volverá a intentar/);
+
+    const late = await runSync({ host: h.host, config, connections: refused.connections, now: new Date('2026-12-10T10:00:00') });
+    expect(late.report.accounts[0]).toMatchObject({ notesWaiting: 0 });
+    expect(notes(late.report.accounts[0])).toMatch(/se deja de intentar: 10\/11\/2026 23\.45 EUR/);
+    expect(late.connections[0].accounts[0].pendingNotes).toBeUndefined();
+  });
+
+  it('a new Wealthfolio account starts without pending notes', async () => {
+    h.bank.transactions.checking = [cardPayment()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    h.accountTypes['wf-other'] = 'CASH';
+    const moved = first.connections.map((c) => ({
+      ...c,
+      accounts: c.accounts.map((a) => ({ ...a, wealthfolioAccountId: 'wf-other', lastSyncedDate: undefined, syncFrom: '2026-11-15' })),
+    }));
+    h.bank.transactions.checking = [cardPayment({ creditor: { name: 'MERCADONA' } })];
+    const second = await runSync({ host: h.host, config, connections: moved, now: new Date('2026-11-21T10:00:00') });
+    expect(h.activities.updates).toHaveLength(0);
+    expect(second.connections[0].accounts[0].pendingNotes).toBeUndefined();
+    expect(h.activities.stored.filter((r) => r.accountId === 'wf-other').map((r) => r.comment)).toEqual([NAMED]);
+  });
+
+  it('does not follow named movements nor transfers between your accounts (round-ups)', async () => {
+    const roundUp = { booking_date: '2026-11-19', transaction_amount: { amount: '0.55', currency: 'EUR' } };
+    h.bank.transactions.checking = [
+      cardPayment({ entry_reference: 'NAMED', creditor: { name: 'MERCADONA' } }),
+      book({ entry_reference: 'RND', remittance_information: ['TRASPASO PROGRAMA TU CUENTA // TRASPASO A CUENTA'], ...roundUp }),
+    ];
+    h.bank.transactions.savings = [
+      book({ entry_reference: 'RNDIN', credit_debit_indicator: 'CRDT', remittance_information: ['TRASPASO PROGRAMA TU CUENTA // TRASPASO DESDE CUENTA'], ...roundUp }),
+    ];
+    const { connections: connected } = await connect(h.host);
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(report.ownTransfers).toBe(1);
+    expect(report.accounts.map((a) => a.notesWaiting)).toEqual([0, 0]);
+    expect(h.activities.stored.map((r) => r.comment)).toEqual([
+      NAMED,
+      'TRASPASO PROGRAMA TU CUENTA // TRASPASO A CUENTA',
+      'TRASPASO PROGRAMA TU CUENTA // TRASPASO DESDE CUENTA',
+    ]);
+    expect(connections[0].accounts.map((a) => a.pendingNotes)).toEqual([undefined, undefined]);
+  });
+});
+
+describe('other movements the bank names later (payroll)', () => {
+  const PAYROLL = 'ABONO DE NOMINA POR TRANSFERENCIA // INGRESO POR NÓMINA O PENSIÓN';
+  const payroll = (overrides: Parameters<typeof book>[0] = {}) =>
+    book({
+      entry_reference: 'PAY',
+      credit_debit_indicator: 'CRDT',
+      booking_date: '2026-11-26',
+      remittance_information: [`${PAYROLL} // ACME SEGUROS SOCIEDA`],
+      transaction_amount: { amount: '1866.00', currency: 'EUR' },
+      ...overrides,
+    });
+  const named = () =>
+    payroll({ debtor: { name: 'ACME SEGUROS SA' }, remittance_information: [`${PAYROLL} // TRF ACME SEGUROS, S.A.`] });
+  const notes = (r: { notes?: unknown[] }) => (r.notes ?? []).map((n) => textEs(n as Parameters<typeof textEs>[0])).join(' ');
+
+  beforeEach(() => {
+    h.bank.transactions.savings = [];
+  });
+
+  it("imports it at once and rewrites the note with what the bank sends when the payer's name arrives", async () => {
+    h.bank.transactions.checking = [payroll()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-26T17:00:00') });
+    expect(first.report.accounts[0]).toMatchObject({ imported: 1, notesWaiting: 1 });
+    expect(first.connections[0].accounts[0].pendingNotes).toEqual({
+      'ref:PAY|2026-11-26|1866.00': { date: '2026-11-26', activityType: 'DEPOSIT', currency: 'EUR', amount: '1866.00' },
+    });
+
+    // A list saved by 1.8.0 marked it as not a card payment: that mark goes.
+    const saved = first.connections.map((c) => ({
+      ...c,
+      accounts: c.accounts.map((a) => ({
+        ...a,
+        pendingNotes: a.pendingNotes && {
+          'ref:PAY|2026-11-26|1866.00': { ...a.pendingNotes['ref:PAY|2026-11-26|1866.00'], kind: 'other' as const },
+        },
+      })),
+    }));
+    const second = await runSync({ host: h.host, config, connections: saved, now: new Date('2026-11-27T10:00:00') });
+    expect(second.connections[0].accounts[0].pendingNotes?.['ref:PAY|2026-11-26|1866.00']).not.toHaveProperty('kind');
+
+    h.bank.transactions.checking = [named()];
+    const third = await runSync({ host: h.host, config, connections: second.connections, now: new Date('2026-11-30T10:00:00') });
+    expect(h.activities.updates).toEqual([
+      {
+        id: 'act-1',
+        accountId: 'wf-checking',
+        activityType: 'DEPOSIT',
+        activityDate: '2026-11-26T00:00:00+00:00',
+        currency: 'EUR',
+        comment: `ACME SEGUROS SA · ${PAYROLL} // TRF ACME SEGUROS, S.A.`,
+      },
+    ]);
+    expect(third.report.accounts[0]).toMatchObject({ notesWritten: 1, notesWaiting: 0 });
+    expect(notes(third.report.accounts[0])).toMatch(/1 nota\(s\) actualizada\(s\) con el nombre delante/);
+    expect(third.connections[0].accounts[0].pendingNotes).toBeUndefined();
+  });
+
+  it(`leaves it as it is after ${NAME_WAIT_DAYS} days without the name, and says so like a card payment`, async () => {
+    h.bank.transactions.checking = [payroll({ booking_date: '2026-11-01' })];
+    const { connections: connected } = await connect(h.host);
+    const day13 = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-14T10:00:00') });
+    expect(day13.report.accounts[0]).toMatchObject({ imported: 1, notesWaiting: 1 });
+
+    const day14 = await runSync({ host: h.host, config, connections: day13.connections, now: new Date('2026-11-15T10:00:00') });
+    expect(h.activities.updates).toHaveLength(0);
+    expect(day14.report.accounts[0]).toMatchObject({ notesWithoutName: 1, notesWaiting: 0 });
+    expect(notes(day14.report.accounts[0])).toMatch(
+      /1 movimiento\(s\) se queda\(n\) sin el nombre del comercio, ordenante o beneficiario, porque el banco no lo ha mandado en 14 días: 01\/11\/2026 1866\.00 EUR\./,
+    );
+    expect(day14.connections[0].accounts[0].pendingNotes).toBeUndefined();
+  });
+
+  it('does not follow a transfer from another synced account (by IBAN)', async () => {
+    h.bank.transactions.checking = [];
+    h.bank.transactions.savings = [
+      book({ entry_reference: 'S1', credit_debit_indicator: 'CRDT', booking_date: '2026-11-19', debtor_account: { iban: IBAN_CHECKING } }),
+    ];
+    const { connections: connected } = await connect(h.host);
+    const { report, connections } = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(h.activities.stored.map((r) => r.activityType)).toEqual(['TRANSFER_IN']);
+    expect(report.accounts[1]).toMatchObject({ imported: 1, notesWaiting: 0 });
+    expect(connections[0].accounts[1].pendingNotes).toBeUndefined();
   });
 });

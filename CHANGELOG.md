@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.8.1] - 2026-11-26
+
+### Changed
+
+- Los movimientos que el banco contabiliza sin el nombre del comercio, ordenante o beneficiario se
+  siguen importando enseguida con el concepto del banco, y ahora el add-on espera 14 días a que
+  llegue el nombre: si una sincronización de ese plazo lo recibe, reescribe la nota con lo que
+  mande entonces el banco, con el nombre delante como el resto. Por ejemplo, BBVA manda «PAGO CON
+  TARJETA EN SUPERMERCADOS» y añade el comercio días después, y una nómina leída el mismo día llega
+  sin el ordenante y con el concepto cortado. Los traspasos entre tus cuentas (como los redondeos)
+  no esperan: nunca traen nombre.
+- Mientras alguno espera, cada sincronización vuelve a leer desde su fecha. Para ello el add-on
+  guarda una lista corta de esos movimientos (fecha, tipo, moneda e importe) durante esos 14 días.
+  Solo cambia la nota de los movimientos que importó él: si en esos días editas la nota de uno, el
+  add-on la sobrescribe.
+- El informe dice cuántos movimientos esperan el nombre, cuántas notas se han actualizado y cuáles
+  se quedan sin él al acabar el plazo. Si Wealthfolio rechaza el cambio de una nota, se reintenta
+  y, pasados 30 días, se deja de intentar con un aviso.
+- Nuevo permiso `activities.update`, solo para reescribir esa nota. No hay hosts nuevos.
+- Se pasa de la 1.5.2 a la 1.8.1 porque las versiones intermedias fueron pruebas personales que no
+  se publicaron.
+
 ## [1.5.2] - 2026-11-26
 
 ### Changed

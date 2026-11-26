@@ -171,6 +171,15 @@ export const es = {
     heldTooOld:
       'Hay movimientos pendientes o rechazados del {{holdDate}} que ya no se volverán a consultar (más de {{days}} días). Revísalos a mano.',
     pendingNote: '{{n}} movimiento(s) pendiente(s): se importarán cuando el banco los contabilice.',
+    notesWaitingNote:
+      '{{n}} movimiento(s) todavía sin el nombre del comercio, ordenante o beneficiario: si el banco lo manda en los {{days}} días siguientes a su fecha, se pondrá delante en la nota.',
+    notesWrittenNote: '{{n}} nota(s) actualizada(s) con el nombre delante.',
+    notesWithoutNameNote:
+      '{{n}} movimiento(s) se queda(n) sin el nombre del comercio, ordenante o beneficiario, porque el banco no lo ha mandado en {{days}} días: {{list}}.',
+    noteUpdateFailed:
+      'No se pudo escribir la nota del movimiento del {{paymentDate}} ({{amount}}): {{detail}}. Se volverá a intentar.',
+    notesGivenUpNote:
+      'No se ha podido escribir la nota de {{n}} movimiento(s) y se deja de intentar: {{list}}. Escríbela a mano si la quieres.',
     rejectedNote: '{{n}} movimiento(s) rechazado(s) por Wealthfolio: se volverán a intentar en la próxima sincronización.',
     ownTransfersNote: '{{n}} movimiento(s) registrado(s) como traspaso entre tus cuentas.',
     transferFrom: 'Transferencia desde',
