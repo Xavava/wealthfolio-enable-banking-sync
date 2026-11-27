@@ -8,7 +8,10 @@ import { maskIban } from '../lib/mapping';
 import type { Text } from '../lib/messages';
 import { matchReportRows } from '../lib/report';
 import {
+  DAILY_READS,
+  readsToday,
   store,
+  toIsoDate,
   type BankConnection,
   type LinkedAccount,
   type SyncAccountResult,
@@ -209,6 +212,10 @@ export function SyncCard({ state }: { state: AddonState }) {
   // Differences that come from movements imported after the bank gave its balance.
   const outdated = checks.filter((c) => c.check?.state === 'outdated').map((c) => c.account);
   const busy = running || refreshing;
+  const reads = readsToday(
+    synced.map((s) => s.account),
+    toIsoDate(new Date()),
+  );
 
   const refresh = async () => {
     if (busy || outdated.length === 0) return;
@@ -299,6 +306,14 @@ export function SyncCard({ state }: { state: AddonState }) {
         toCheck > 0 ? <Badge variant="warning-subtle">{t('syncCard.toCheck', { n: toCheck })}</Badge> : undefined
       }
       summary={report ? t('syncCard.collapsedSummary', { when: formatWhen(report.finishedAt), n: report.imported }) : undefined}
+      description={
+        synced.length > 0 && (
+          <span className={reads >= DAILY_READS ? 'text-amber-600 dark:text-amber-400' : undefined}>
+            {t('syncCard.readsToday', { n: reads, max: DAILY_READS })}
+            {reads >= DAILY_READS && ` · ${t('syncCard.readsExhausted')}`}
+          </span>
+        )
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {(outdated.length > 0 || refreshing) && (

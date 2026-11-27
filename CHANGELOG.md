@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.0] - 2026-11-27
+
+### Added
+
+- Bajo el título de *Sincronización* se ve cuántas veces ha leído hoy el add-on los movimientos
+  del banco: «Consultas de hoy: 3 de 4». PSD2 limita a unas 4 al día las consultas sin el usuario
+  delante. Al llegar a 4, la línea se pone en naranja y avisa de que el banco no dejará leer más
+  movimientos hasta medianoche. *Sincronizar ahora* sigue disponible.
+- Es un solo número para todas las cuentas, porque cada sincronización las lee todas: el de la
+  cuenta que más lleve. Solo cuenta las lecturas que el banco acepta y vuelve a cero cada día y al
+  renovar un banco. Las lecturas de saldo no cuentan: el banco las lleva aparte.
+- Empieza a contar al instalar esta versión: lo leído antes ese mismo día no aparece.
+- No hay permisos ni hosts nuevos.
+
 ## [1.8.3] - 2026-11-27
 
 ### Changed

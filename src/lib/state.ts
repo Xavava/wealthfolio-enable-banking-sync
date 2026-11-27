@@ -73,6 +73,12 @@ export interface LinkedAccount {
    */
   history?: { requestedFrom: string; earliest?: string; checkedAt: string };
   /**
+   * Reads of movements the bank accepted on `date` (local YYYY-MM-DD). Balance reads
+   * are not counted: the bank keeps them apart. Not kept on renewal: the bank counts
+   * per consent.
+   */
+  reads?: { date: string; count: number };
+  /**
    * Movements imported in the last NAME_WAIT_DAYS days without the other party's
    * name (shop, payer or payee; their note is the bank's description), by
    * `sourceRecordId`. Transfers between your accounts are left out. If the bank
@@ -243,6 +249,20 @@ export function toDateOnly(value: Date | string | null | undefined): string | nu
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : toIsoDate(date);
+}
+
+/** Reads of movements a day PSD2 lets the bank serve without the user present. */
+export const DAILY_READS = 4;
+
+/** Counts one read of the account's movements on `today` (YYYY-MM-DD). */
+export function countRead(account: LinkedAccount, today: string): void {
+  const before = account.reads?.date === today ? account.reads.count : 0;
+  account.reads = { date: today, count: before + 1 };
+}
+
+/** Today's reads of the account that has used the most: every sync reads them all. */
+export function readsToday(accounts: LinkedAccount[], today: string): number {
+  return Math.max(0, ...accounts.map((a) => (a.reads?.date === today ? a.reads.count : 0)));
 }
 
 /** Earliest start date accepted; anything before is a typing slip (e.g. year 0026). */

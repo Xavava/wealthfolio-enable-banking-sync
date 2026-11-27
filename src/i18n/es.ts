@@ -124,6 +124,8 @@ export const es = {
     lastGoodSync: 'Última sincronización correcta: {{when}}',
     collapsedSummary: 'Última: {{when}} · {{n}} nuevo(s)',
     toCheck: '{{n}} cuenta(s) por revisar',
+    readsToday: 'Consultas de hoy: {{n}} de {{max}}',
+    readsExhausted: 'el banco no dejará leer más movimientos hasta medianoche',
     notSyncedYet: 'Todavía no se ha sincronizado.',
     needsStartDate: 'Elige desde qué fecha importar en «Bancos conectados».',
     newCount: '{{n}} nuevo(s)',

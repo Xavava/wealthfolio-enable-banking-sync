@@ -215,7 +215,10 @@ bank.
 ## Limitations
 
 - **Requests per day**: under PSD2, some banks limit requests made without the user present to
-  about 4 a day per account. If you see a rate-limit error, wait a few hours.
+  about 4 a day per account. Under the *Sync* title you can see how many times the add-on has
+  read transactions today ("Bank reads today: 3 of 4"), for the account with the most. If you see
+  a rate-limit error, wait until midnight (that is how BBVA and Sabadell work). Balance reads are
+  not part of that count.
 - **History**: many banks only give 90 days of transactions, except right after authorizing (see
   *How much history the bank gives*).
 - Categories are not imported: use Wealthfolio's spending categorization rules.

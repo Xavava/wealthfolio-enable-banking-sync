@@ -12,6 +12,7 @@ import { mapTransactions, maskIban, pendingDate, transactionDate, type TransferL
 import { errorToText, msg, type Text } from './messages';
 import {
   addDays,
+  countRead,
   daysBetween,
   formatIsoDate,
   isExpired,
@@ -341,6 +342,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
       let keepWindow = false;
       try {
         const transactions = await client.getAllTransactions(account.uid, dateFrom, today, { strategy });
+        countRead(account, today);
         result.fetched = transactions.length;
 
         if (strategy === 'longest') {

@@ -120,6 +120,8 @@ export const en: Translations = {
     lastGoodSync: 'Last successful sync: {{when}}',
     collapsedSummary: 'Last: {{when}} · {{n}} new',
     toCheck: '{{n}} account(s) to check',
+    readsToday: 'Bank reads today: {{n}} of {{max}}',
+    readsExhausted: 'the bank will not give more transactions until midnight',
     notSyncedYet: 'Not synced yet.',
     needsStartDate: 'Choose the date to import from in "Connected banks".',
     newCount: '{{n}} new',

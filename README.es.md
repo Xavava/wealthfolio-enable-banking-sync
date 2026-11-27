@@ -222,7 +222,10 @@ de más al banco.
 ## Limitaciones
 
 - **Consultas al día**: por PSD2, algunos bancos limitan las consultas sin el usuario delante a
-  unas 4 al día por cuenta. Si ves un error de límite, espera unas horas.
+  unas 4 al día por cuenta. Bajo el título de *Sincronización* verás cuántas veces ha leído hoy
+  el add-on los movimientos («Consultas de hoy: 3 de 4»), según la cuenta que más lleve. Si ves
+  un error de límite, espera a medianoche (así funcionan BBVA y Sabadell). Las lecturas de saldo
+  no entran en esa cuenta.
 - **Histórico**: muchos bancos solo dan 90 días de movimientos, salvo justo después de
   autorizar (ver *Cuánto historial da el banco*).
 - No importa categorías: usa las reglas de categorización de gastos de Wealthfolio.

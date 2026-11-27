@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EnableBankingClient, NetworkBlockedError, PRIVATE_KEY_SECRET } from '../src/lib/enable-banking-client';
 import { mapTransactions } from '../src/lib/mapping';
+import { readsToday } from '../src/lib/state';
 import { NAME_WAIT_DAYS, refreshBalances, runSync } from '../src/lib/sync';
 import {
   APP_ID,
@@ -105,6 +106,30 @@ describe('end-to-end sync against a fake Enable Banking API', () => {
     const { report } = await runSync({ host: h.host, config, connections: expired, now: new Date('2026-11-20T10:00:00') });
     expect(report.accounts.every((a) => a.status === 'reconnect')).toBe(true);
     expect(h.bank.requests).toHaveLength(0);
+  });
+
+  it('counts the reads of movements the bank accepted, per local day', async () => {
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T00:05:00') });
+    // Two pages of the checking account are still one read.
+    expect(first.connections[0].accounts.map((a) => a.reads)).toEqual([
+      { date: '2026-11-20', count: 1 },
+      { date: '2026-11-20', count: 1 },
+    ]);
+    const second = await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-20T23:55:00') });
+    expect(readsToday(second.connections[0].accounts, '2026-11-20')).toBe(2);
+    expect(readsToday(second.connections[0].accounts, '2026-11-21')).toBe(0);
+
+    // A read the bank refuses is not counted.
+    h.bank.rateLimited = true;
+    const refused = await runSync({ host: h.host, config, connections: second.connections, now: new Date('2026-11-20T23:58:00') });
+    expect(refused.report.accounts.map((a) => a.status)).toEqual(['error', 'error']);
+    expect(readsToday(refused.connections[0].accounts, '2026-11-20')).toBe(2);
+
+    // A new day starts from zero.
+    h.bank.rateLimited = false;
+    const next = await runSync({ host: h.host, config, connections: refused.connections, now: new Date('2026-11-21T00:01:00') });
+    expect(next.connections[0].accounts[0].reads).toEqual({ date: '2026-11-21', count: 1 });
   });
 
   it('does not advance the sync window when Wealthfolio rejects the import', async () => {

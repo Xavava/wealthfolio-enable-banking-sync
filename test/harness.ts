@@ -105,6 +105,8 @@ export class FakeEnableBanking {
   /** Wealthfolio refuses to send requests (e.g. host not approved after an update). */
   blocked = false;
   blockedAttempts = 0;
+  /** The bank refuses reads of movements, like after the 4 a day PSD2 allows. */
+  rateLimited = false;
 
   handle = async (request: NetworkRequest): Promise<NetworkResponse> => {
     if (this.blocked) {
@@ -146,7 +148,10 @@ export class FakeEnableBanking {
     }
     const match = url.pathname.match(/^\/accounts\/(checking|savings)-\d+\/(transactions|balances)$/);
     if (method === 'GET' && match && match[2] === 'transactions') {
-      const all = this.availableTransactions(match[1], url.searchParams);
+      if (this.rateLimited) {
+        return json(429, { message: '[HUB046] Allowed number of accesses exceeded for consent.', error: 'ASPSP_RATE_LIMIT_EXCEEDED' });
+      }
+      const all =this.availableTransactions(match[1], url.searchParams);
       // Two pages to exercise continuation keys.
       if (url.searchParams.get('continuation_key') === 'page-2') {
         return json(200, { transactions: all.slice(2), continuation_key: null });
