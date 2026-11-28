@@ -135,6 +135,11 @@ y ningún banco la documenta, así que solo se lee en los formatos comprobados:
 
 Con otros bancos, o si un banco cambia su formato, los movimientos entran sin hora.
 
+El día que cuenta es el de España. Entre las 0:00 y las 2:00 la hora UTC que guarda Wealthfolio
+todavía es del día anterior, pero Wealthfolio enseña el movimiento en su día. El momento que da el
+banco se guarda siempre en los metadatos de la actividad (`referenceMoment`, en UTC), también cuando
+es de otro día y el movimiento entra sin hora. Wealthfolio no tiene dónde mostrarlo.
+
 En cada sincronización se vuelven a leer los 7 días anteriores a la última, para recoger
 movimientos que el banco contabiliza tarde. Los ya importados se saltan solos.
 

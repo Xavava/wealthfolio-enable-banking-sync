@@ -8,7 +8,7 @@ import {
   NetworkBlockedError,
   type TransactionsStrategy,
 } from './enable-banking-client';
-import { mapTransactions, maskIban, pendingDate, transactionDate, type TransferLabels } from './mapping';
+import { mapTransactions, maskIban, movementDay, pendingDate, transactionDate, type TransferLabels } from './mapping';
 import { errorToText, msg, type Text } from './messages';
 import {
   addDays,
@@ -429,7 +429,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
   const invalidRows: InvalidRowInfo[] = [];
   const recordInvalid = (entry: AccountWork, original: ActivityImport, errors: Text[]) => {
     entry.result.invalid += 1;
-    const date = String(original.date ?? '').slice(0, 10);
+    const date = movementDay(String(original.date ?? ''));
     if (date) entry.holdDates.push(date);
     invalidRows.push({
       account: `${entry.result.bank} · ${entry.result.wealthfolioAccount ?? entry.result.account}`,
@@ -478,7 +478,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
         key,
         accountId: f.original.accountId,
         activityType: f.original.activityType,
-        date: String(f.original.date ?? '').slice(0, 10),
+        date: movementDay(String(f.original.date ?? '')),
         amount: String(f.original.amount ?? ''),
         currency: f.original.currency ?? '',
         comment: f.original.comment,
@@ -523,7 +523,7 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
               f.work.result.imported += 1;
               const ref = f.original.sourceRecordId ?? '';
               const imported = String(f.row.date ?? '');
-              const date = imported.slice(0, 10);
+              const date = movementDay(imported);
               // Transfers between your accounts never get a name, and they are linked in pairs.
               const transfer = f.row.activityType === 'TRANSFER_IN' || f.row.activityType === 'TRANSFER_OUT';
               if (f.work.unnamed.has(ref) && !transfer && date >= addDays(today, -(NAME_WAIT_DAYS - 1))) {

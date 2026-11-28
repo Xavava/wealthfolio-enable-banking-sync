@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.12.0] - 2026-11-28
+
+### Fixed
+
+- Los movimientos cuya hora cae entre las 0:00 y las 2:00 en España entraban sin hora, porque en
+  UTC todavía eran del día anterior. Ahora cuenta solo el día de España: si coincide con el
+  contable, el movimiento lleva su hora. Suelen ser procesos nocturnos del
+  banco.
+
+### Added
+
+- El momento que da el banco se guarda siempre en los metadatos del movimiento, como
+  `referenceMoment` en UTC. También cuando es de otro día, como una compra del sábado que el banco
+  contabiliza el lunes: el movimiento sigue en el día contable y sin hora, pero el dato queda
+  guardado. Wealthfolio no lo enseña.
+- No hay permisos ni hosts nuevos.
+
 ## [1.11.0] - 2026-11-28
 
 ### Added

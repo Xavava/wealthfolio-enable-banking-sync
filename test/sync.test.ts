@@ -859,3 +859,33 @@ describe('BBVA movements with the time of their reference', () => {
     expect(first.connections[0].accounts[0].pendingNotes?.[`ref:${REF}|2026-11-19|-23.45`]).not.toHaveProperty('activityDate');
   });
 });
+
+describe('a BBVA movement between midnight and 2:00 in Spain', () => {
+  const REF = '140000070000000000261118233000000000'; // 18/11 23:30 UTC = 19/11 00:30 in Spain
+
+  beforeEach(() => {
+    h.bank.transactions.savings = [];
+  });
+
+  it('gets its time, and its pending note keeps the Spanish day', async () => {
+    h.bank.transactions.checking = [
+      book({
+        entry_reference: REF,
+        booking_date: '2026-11-19',
+        remittance_information: ['PAGO CON TARJETA EN SUPERMERCADOS'],
+        transaction_amount: { amount: '23.45', currency: 'EUR' },
+      }),
+    ];
+    const { connections: connected } = await connect(h.host);
+    const bbva = mapAll(connected).map((c) => ({ ...c, aspsp: { ...c.aspsp, name: 'BBVA' } }));
+    const first = await runSync({ host: h.host, config, connections: bbva, now: new Date('2026-11-20T10:00:00') });
+    expect(h.activities.stored.map((r) => [r.date, r.sourceRecordId])).toEqual([
+      ['2026-11-18T23:30:00+00:00', `ref:${REF}|2026-11-19|-23.45`],
+    ]);
+    expect(first.connections[0].accounts[0].pendingNotes?.[`ref:${REF}|2026-11-19|-23.45`]).toMatchObject({
+      date: '2026-11-19',
+      activityDate: '2026-11-18T23:30:00+00:00',
+    });
+    expect(first.connections[0].accounts[0].retryFrom).toBe('2026-11-19');
+  });
+});

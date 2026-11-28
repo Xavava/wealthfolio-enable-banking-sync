@@ -129,6 +129,11 @@ documents it, so it is only read in the formats checked so far:
 
 With other banks, or if a bank changes its format, transactions come in without a time.
 
+The day that counts is the Spanish one. Between 00:00 and 02:00 the UTC time Wealthfolio stores is
+still the previous day, but Wealthfolio shows the transaction on its day. The moment the bank gives
+is always kept in the activity's metadata (`referenceMoment`, UTC), also when it is on another day
+and the transaction comes in without a time. Wealthfolio has nowhere to show it.
+
 Every sync reads again the 7 days before the last one, to pick up transactions the bank books
 late. Those already imported are skipped automatically.
 

@@ -134,24 +134,47 @@ const REFERENCE_TIMES: Array<{ bank: RegExp; read: (reference: string) => { cloc
   },
 ];
 
-/**
- * The moment the bank's entry reference carries, as a timestamp on the
- * movement's day, or null to keep the bare day.
- *
- * A moment outside `day` (the booking day) in UTC or in Spain also gives null,
- * like a Saturday payment booked on Monday: the movement stays on the bank's
- * day, and Wealthfolio, which pairs transfers and spots duplicates by the UTC
- * day and values accounts by the Spanish one, sees the same day as before.
- */
-export function referenceTime(tx: EbTransaction, bankName: string, day: string): string | null {
+/** The moment the bank's entry reference carries, as an instant, or null. */
+function referenceInstant(tx: EbTransaction, bankName: string): Date | null {
   const reference = (tx.entry_reference ?? '').trim();
   const format = REFERENCE_TIMES.find((f) => f.bank.test(bankName.trim()));
   const read = format && reference ? format.read(reference) : null;
-  const instant = read ? instantOf(read.clock, read.zone) : null;
-  if (!instant) return null;
-  const iso = instant.toISOString();
-  if (iso.slice(0, 10) !== day || madridDay(instant) !== day) return null;
-  return `${day}T${iso.slice(11, 19)}+00:00`;
+  return read ? instantOf(read.clock, read.zone) : null;
+}
+
+/**
+ * The moment the bank's entry reference carries, in UTC ("…Z"), whatever its
+ * day, or null. Kept in the activity's metadata even when the movement stays
+ * on its bare booking day: Wealthfolio has no field to show it.
+ */
+export function referenceMoment(tx: EbTransaction, bankName: string): string | null {
+  const instant = referenceInstant(tx, bankName);
+  return instant ? `${instant.toISOString().slice(0, 19)}Z` : null;
+}
+
+/**
+ * The moment the bank's entry reference carries, as a UTC timestamp, when it
+ * falls on `day` (the booking day) in Spain; otherwise null, to keep the bare
+ * day. A Saturday payment booked on Monday keeps Monday.
+ *
+ * Between 00:00 and 02:00 in Spain the UTC timestamp is still the previous
+ * day. That is fine: Wealthfolio shows and values activities by the day in the
+ * app's time zone, and recognises the add-on's rows by their ID, not their date.
+ */
+export function referenceTime(tx: EbTransaction, bankName: string, day: string): string | null {
+  const instant = referenceInstant(tx, bankName);
+  if (!instant || madridDay(instant) !== day) return null;
+  return `${instant.toISOString().slice(0, 19)}+00:00`;
+}
+
+/**
+ * The Spanish day of an import row's date: a bare day as it is; a timestamp
+ * by the Spanish clock, as `referenceTime` chose it.
+ */
+export function movementDay(date: string): string {
+  if (date.length <= 10) return date;
+  const instant = new Date(date);
+  return (Number.isNaN(instant.getTime()) ? null : madridDay(instant)) ?? date.slice(0, 10);
 }
 
 /**
@@ -357,6 +380,8 @@ export async function mapTransactions(
         transactionId: tx.transaction_id ?? undefined,
         bookingDate: tx.booking_date ?? undefined,
         valueDate: tx.value_date ?? undefined,
+        // When the bank says it happened, also when that is another day.
+        referenceMoment: referenceMoment(tx, options.bankName) ?? undefined,
         counterparty: counterpartyName(tx) || undefined,
         bankTransactionCode: tx.bank_transaction_code?.description ?? undefined,
         merchantCategoryCode: tx.merchant_category_code ?? undefined,
