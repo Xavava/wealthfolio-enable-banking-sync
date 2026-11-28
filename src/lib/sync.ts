@@ -152,7 +152,13 @@ function keptNotes(saved: Record<string, PendingNote> | undefined): Record<strin
   return Object.fromEntries(
     Object.entries(saved ?? {}).map(([ref, n]) => [
       ref,
-      { date: n.date, activityType: n.activityType, currency: n.currency, amount: n.amount },
+      {
+        date: n.date,
+        ...(n.activityDate ? { activityDate: n.activityDate } : {}),
+        activityType: n.activityType,
+        currency: n.currency,
+        amount: n.amount,
+      },
     ]),
   );
 }
@@ -200,8 +206,8 @@ async function writePendingNotes(host: SyncHost, entry: AccountWork, today: stri
         id: activityId,
         accountId: account.wealthfolioAccountId,
         activityType: note.activityType,
-        // As Wealthfolio stores imported dates (midnight UTC), so the date never moves.
-        activityDate: `${note.date}T00:00:00+00:00`,
+        // As it was imported (a bare day is stored at midnight UTC), so the date never moves.
+        activityDate: note.activityDate ?? `${note.date}T00:00:00+00:00`,
         currency: note.currency,
         comment: text,
       });
@@ -516,12 +522,14 @@ export async function runSync(options: SyncOptions): Promise<SyncOutcome> {
             else {
               f.work.result.imported += 1;
               const ref = f.original.sourceRecordId ?? '';
-              const date = String(f.row.date ?? '').slice(0, 10);
+              const imported = String(f.row.date ?? '');
+              const date = imported.slice(0, 10);
               // Transfers between your accounts never get a name, and they are linked in pairs.
               const transfer = f.row.activityType === 'TRANSFER_IN' || f.row.activityType === 'TRANSFER_OUT';
               if (f.work.unnamed.has(ref) && !transfer && date >= addDays(today, -(NAME_WAIT_DAYS - 1))) {
                 f.work.pending[ref] = {
                   date,
+                  ...(imported.length > 10 ? { activityDate: imported } : {}),
                   activityType: f.row.activityType,
                   currency: f.row.currency ?? '',
                   amount: String(f.row.amount ?? ''),

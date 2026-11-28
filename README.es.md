@@ -122,6 +122,13 @@ El comentario de cada actividad lleva la contraparte y el concepto (`MERCADONA �
 1234`). Los detalles del banco (referencia, fechas de contabilización y valor, código de
 operación) se guardan en los metadatos de la actividad.
 
+Cada actividad lleva la fecha de contabilización. Con BBVA lleva además la hora que trae su
+referencia: en los pagos con tarjeta, la de la compra; en recibos y traspasos, la del proceso del
+banco. Wealthfolio la muestra en tu zona horaria y ordena por ella los movimientos de cada día. Si
+esa hora es de otro día (una compra del sábado contabilizada el lunes), el movimiento entra sin
+hora, en el día de contabilización. Es un formato de BBVA sin documentar: con otros bancos, o si
+BBVA lo cambia, los movimientos entran sin hora.
+
 En cada sincronización se vuelven a leer los 7 días anteriores a la última, para recoger
 movimientos que el banco contabiliza tarde. Los ya importados se saltan solos.
 

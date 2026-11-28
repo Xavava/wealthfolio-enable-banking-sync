@@ -91,6 +91,11 @@ export interface LinkedAccount {
 export interface PendingNote {
   /** Date of the movement (YYYY-MM-DD). */
   date: string;
+  /**
+   * Date and time it was imported with, when it has a time (BBVA, from 1.10.0).
+   * The note is rewritten with it so the time stays. Absent: midnight UTC.
+   */
+  activityDate?: string;
   /** Activity type it was imported with (Wealthfolio needs it to update the note). */
   activityType: string;
   currency: string;

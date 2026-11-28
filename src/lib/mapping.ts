@@ -59,6 +59,46 @@ export function transactionDate(tx: EbTransaction): string | null {
   return value ? value.slice(0, 10) : null;
 }
 
+const MADRID_DAY = (() => {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+  } catch {
+    return null;
+  }
+})();
+
+function madridDay(instant: Date): string | null {
+  if (!MADRID_DAY) return null;
+  const parts = Object.fromEntries(MADRID_DAY.formatToParts(instant).map((p) => [p.type, p.value]));
+  return parts.year && parts.month && parts.day ? `${parts.year}-${parts.month}-${parts.day}` : null;
+}
+
+/**
+ * The moment BBVA's entry reference carries, as a timestamp on the movement's
+ * day, or null to keep the bare day.
+ *
+ * BBVA's references are 36 digits, and digits 19 to 30 are a moment as
+ * YYMMDDhhmmss in UTC: for a card payment, when it was paid; for receipts and
+ * transfers, when the bank processed them. It is not documented, so anything
+ * else gives null. So does a moment outside `day` (the booking day) in UTC or in
+ * Spain, like a Saturday payment booked on Monday: the movement stays on the
+ * bank's day, and Wealthfolio, which pairs transfers and spots duplicates by the
+ * UTC day, sees the same day as before.
+ */
+export function bbvaReferenceTime(tx: EbTransaction, bankName: string, day: string): string | null {
+  if (bankName.trim().toUpperCase() !== 'BBVA') return null;
+  const reference = (tx.entry_reference ?? '').trim();
+  if (!/^\d{36}$/.test(reference)) return null;
+  const [yy, mo, dd, hh, mi, ss] = (reference.slice(18, 30).match(/\d\d/g) ?? []).map(Number);
+  const instant = new Date(Date.UTC(2000 + yy, mo - 1, dd, hh, mi, ss));
+  const valid =
+    instant.getUTCMonth() === mo - 1 && instant.getUTCDate() === dd && hh < 24 && mi < 60 && ss < 60;
+  if (!valid) return null;
+  const iso = instant.toISOString();
+  if (iso.slice(0, 10) !== day || madridDay(instant) !== day) return null;
+  return `${day}T${iso.slice(11, 19)}+00:00`;
+}
+
 /**
  * Earliest date a pending movement carries. The booked version keeps a booking
  * date on or after it, so reading again from here is enough to pick it up.
@@ -245,7 +285,8 @@ export async function mapTransactions(
     const row: ActivityImport = {
       accountId: options.wealthfolioAccountId,
       activityType,
-      date,
+      // The booking day; with BBVA, also the time its reference carries.
+      date: bbvaReferenceTime(tx, options.bankName, date) ?? date,
       // Cash movement: no asset. The SDK type marks `symbol` optional, but the host
       // requires the field (an empty string for cash, as in Wealthfolio's addon docs);
       // without it checkImport/import fail with a generic internal error.

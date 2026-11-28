@@ -807,3 +807,55 @@ describe('other movements the bank names later (payroll)', () => {
     expect(connections[0].accounts[1].pendingNotes).toBeUndefined();
   });
 });
+
+describe('BBVA movements with the time of their reference', () => {
+  const REF = '140000070000000000261119183000000000'; // 19/11/2026 18:30:00 UTC
+  const asBbva = (connections: ReturnType<typeof mapAll>) =>
+    connections.map((c) => ({ ...c, aspsp: { ...c.aspsp, name: 'BBVA' } }));
+  const cardPayment = (overrides: Parameters<typeof book>[0] = {}) =>
+    book({
+      entry_reference: REF,
+      booking_date: '2026-11-19',
+      remittance_information: ['PAGO CON TARJETA EN SUPERMERCADOS'],
+      transaction_amount: { amount: '23.45', currency: 'EUR' },
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    h.bank.transactions.savings = [];
+  });
+
+  it('imports it with the time and keeps the time when the name arrives', async () => {
+    h.bank.transactions.checking = [cardPayment()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: asBbva(mapAll(connected)), now: new Date('2026-11-20T10:00:00') });
+    expect(h.activities.stored.map((r) => [r.date, r.sourceRecordId])).toEqual([
+      ['2026-11-19T18:30:00+00:00', `ref:${REF}|2026-11-19|-23.45`],
+    ]);
+    expect(first.connections[0].accounts[0].pendingNotes).toEqual({
+      [`ref:${REF}|2026-11-19|-23.45`]: {
+        date: '2026-11-19',
+        activityDate: '2026-11-19T18:30:00+00:00',
+        activityType: 'WITHDRAWAL',
+        currency: 'EUR',
+        amount: '23.45',
+      },
+    });
+    expect(first.connections[0].accounts[0].retryFrom).toBe('2026-11-19');
+
+    h.bank.transactions.checking = [cardPayment({ creditor: { name: 'MERCADONA' } })];
+    const second = await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-21T10:00:00') });
+    expect(second.report.accounts[0]).toMatchObject({ imported: 0, duplicates: 1, notesWritten: 1 });
+    expect(h.activities.updates.map((u) => [u.activityDate, u.comment])).toEqual([
+      ['2026-11-19T18:30:00+00:00', 'MERCADONA · PAGO CON TARJETA EN SUPERMERCADOS'],
+    ]);
+  });
+
+  it('leaves other banks with the bare day', async () => {
+    h.bank.transactions.checking = [cardPayment()];
+    const { connections: connected } = await connect(h.host);
+    const first = await runSync({ host: h.host, config, connections: mapAll(connected), now: new Date('2026-11-20T10:00:00') });
+    expect(h.activities.stored.map((r) => r.date)).toEqual(['2026-11-19']);
+    expect(first.connections[0].accounts[0].pendingNotes?.[`ref:${REF}|2026-11-19|-23.45`]).not.toHaveProperty('activityDate');
+  });
+});

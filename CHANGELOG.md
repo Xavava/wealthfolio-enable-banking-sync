@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.10.0] - 2026-11-28
+
+### Added
+
+- Los movimientos de BBVA entran con la hora que trae su referencia: en los pagos con tarjeta, la
+  de la compra; en recibos y traspasos, la del proceso del banco. Wealthfolio la muestra en tu zona
+  horaria bajo la fecha y ordena por ella los movimientos de cada día, también en la columna
+  *Saldo*. Hasta ahora todos salían a la 1:00 (2:00 en verano), la medianoche UTC.
+- El día no cambia: sigue siendo el de contabilización, como en el extracto. Si la hora es de otro
+  día, como una compra del sábado que el banco contabiliza el lunes, el movimiento entra sin hora,
+  igual que antes.
+- Al poner el nombre del comercio en la nota de un movimiento con hora, la hora se mantiene.
+- Es un formato de BBVA sin documentar. Con otros bancos, o si una referencia no trae una fecha y
+  hora válidas, los movimientos entran como antes. Los movimientos ya importados no cambian.
+- No hay permisos ni hosts nuevos.
+
 ## [1.9.0] - 2026-11-27
 
 ### Added

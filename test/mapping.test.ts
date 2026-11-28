@@ -196,3 +196,53 @@ describe('movements the bank names later (BBVA)', () => {
     expect((await mapTransactions([card, payroll], baseOptions)).unnamed.size).toBe(0);
   });
 });
+
+describe('time from the BBVA reference', () => {
+  // 18 digits, the moment (YYMMDDhhmmss, UTC), 6 digits: like BBVA's 36-digit references.
+  const ref = (moment: string) => `140000070000000000${moment}000000`;
+  const bbva = { ...baseOptions, bankName: 'BBVA' };
+  const dateOf = async (overrides: Partial<EbTransaction>, options = bbva) =>
+    (await mapTransactions([tx(overrides)], options)).rows[0].date;
+
+  it('adds the time when the moment falls on the booking day, keeping the ID by day', async () => {
+    const { rows } = await mapTransactions(
+      [tx({ entry_reference: ref('261125105807'), booking_date: '2026-11-25', value_date: '2026-11-25' })],
+      bbva,
+    );
+    expect(rows[0].date).toBe('2026-11-25T10:58:07+00:00');
+    expect(rows[0].sourceRecordId).toBe(`ref:${ref('261125105807')}|2026-11-25|-10.00`);
+    expect(rows[0].metadata).toMatchObject({ bookingDate: '2026-11-25', valueDate: '2026-11-25' });
+  });
+
+  it('keeps the bare day when the bank booked it another day', async () => {
+    // Paid on Saturday 24/10, booked on Monday 26/10.
+    expect(await dateOf({ entry_reference: ref('261024190800'), booking_date: '2026-10-26', value_date: '2026-10-24' })).toBe(
+      '2026-10-26',
+    );
+  });
+
+  it('keeps the bare day when the moment is on another day in Spain or in UTC', async () => {
+    // 23:30 UTC on 25/11 is 00:30 on 26/11 in Spain (winter, UTC+1).
+    expect(await dateOf({ entry_reference: ref('261125233000'), booking_date: '2026-11-25' })).toBe('2026-11-25');
+    // 23:30 UTC on 24/11 is already 25/11 in Spain, but not in UTC.
+    expect(await dateOf({ entry_reference: ref('261124233000'), booking_date: '2026-11-25' })).toBe('2026-11-25');
+    // Summer (UTC+2): 22:00 UTC is midnight in Spain; 21:59 UTC is still the same day.
+    expect(await dateOf({ entry_reference: ref('260710220000'), booking_date: '2026-07-10' })).toBe('2026-07-10');
+    expect(await dateOf({ entry_reference: ref('260710215900'), booking_date: '2026-07-10' })).toBe(
+      '2026-07-10T21:59:00+00:00',
+    );
+  });
+
+  it('only reads BBVA references that carry a valid moment', async () => {
+    const day = { booking_date: '2026-11-25' };
+    expect(await dateOf({ ...day, entry_reference: ref('261125105807') }, { ...baseOptions, bankName: 'Banco de Sabadell' })).toBe(
+      '2026-11-25',
+    );
+    expect(await dateOf({ ...day, entry_reference: 'K1' })).toBe('2026-11-25');
+    expect(await dateOf({ ...day, entry_reference: `${ref('261125105807')}0` })).toBe('2026-11-25');
+    expect(await dateOf({ ...day, entry_reference: ref('261325105807') })).toBe('2026-11-25');
+    expect(await dateOf({ booking_date: '2026-02-28', entry_reference: ref('260230105807') })).toBe('2026-02-28');
+    expect(await dateOf({ ...day, entry_reference: ref('261125246000') })).toBe('2026-11-25');
+    expect(await dateOf({ ...day, entry_reference: undefined, transaction_id: ref('261125105807') })).toBe('2026-11-25');
+  });
+});
