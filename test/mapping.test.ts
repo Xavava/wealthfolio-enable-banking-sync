@@ -197,7 +197,7 @@ describe('movements the bank names later (BBVA)', () => {
   });
 });
 
-describe('time from the BBVA reference', () => {
+describe('time from the BBVA reference (UTC)', () => {
   // 18 digits, the moment (YYMMDDhhmmss, UTC), 6 digits: like BBVA's 36-digit references.
   const ref = (moment: string) => `140000070000000000${moment}000000`;
   const bbva = { ...baseOptions, bankName: 'BBVA' };
@@ -244,5 +244,45 @@ describe('time from the BBVA reference', () => {
     expect(await dateOf({ booking_date: '2026-02-28', entry_reference: ref('260230105807') })).toBe('2026-02-28');
     expect(await dateOf({ ...day, entry_reference: ref('261125246000') })).toBe('2026-11-25');
     expect(await dateOf({ ...day, entry_reference: undefined, transaction_id: ref('261125105807') })).toBe('2026-11-25');
+  });
+});
+
+describe('time from the Banco de Sabadell reference', () => {
+  const sabadell = { ...baseOptions, bankName: 'Banco de Sabadell' };
+  const dateOf = async (overrides: Partial<EbTransaction>, options = sabadell) =>
+    (await mapTransactions([tx(overrides)], options)).rows[0].date;
+
+  it('reads its Spanish time and stores the UTC moment, keeping the ID by day', async () => {
+    // 17/11 09:15:20 in Spain (winter, UTC+1).
+    const { rows } = await mapTransactions(
+      [tx({ entry_reference: '20261117091520000001S1', booking_date: '2026-11-17', credit_debit_indicator: 'CRDT' })],
+      sabadell,
+    );
+    expect(rows[0].date).toBe('2026-11-17T08:15:20+00:00');
+    expect(rows[0].sourceRecordId).toBe('ref:20261117091520000001S1|2026-11-17|10.00');
+    // Summer (UTC+2).
+    expect(await dateOf({ entry_reference: '20260923101530000002S1', booking_date: '2026-09-23' })).toBe(
+      '2026-09-23T08:15:30+00:00',
+    );
+  });
+
+  it('keeps the bare day for a moment on another day, in Spain or in UTC', async () => {
+    // Remuneration worked out on Friday night, booked on Monday.
+    expect(await dateOf({ entry_reference: '20261113221000000003S1', booking_date: '2026-11-16' })).toBe('2026-11-16');
+    // 00:30 in Spain is still the previous day in UTC.
+    expect(await dateOf({ entry_reference: '20261117003000000001S1', booking_date: '2026-11-17' })).toBe('2026-11-17');
+    // 01:30 in Spain (winter) is 00:30 UTC: the same day in both.
+    expect(await dateOf({ entry_reference: '20261117013000000001S1', booking_date: '2026-11-17' })).toBe(
+      '2026-11-17T00:30:00+00:00',
+    );
+  });
+
+  it('only reads references in its format, and not a moment Spain skips', async () => {
+    const day = { booking_date: '2026-11-17' };
+    expect(await dateOf({ ...day, entry_reference: '20261117091520000001' })).toBe('2026-11-17');
+    expect(await dateOf({ ...day, entry_reference: '20261117091520000001S1' }, baseOptions)).toBe('2026-11-17');
+    expect(await dateOf({ ...day, entry_reference: '20261117250000000001S1' })).toBe('2026-11-17');
+    // 29/03/2026 02:30 does not exist in Spain: clocks jump from 02:00 to 03:00.
+    expect(await dateOf({ booking_date: '2026-03-29', entry_reference: '20260329023000000001S1' })).toBe('2026-03-29');
   });
 });

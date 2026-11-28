@@ -116,12 +116,18 @@ Each activity's comment carries the counterparty and the description (`MERCADONA
 1234`). The bank's details (reference, booking and value dates, transaction code) are kept in the
 activity's metadata.
 
-Each activity carries the booking date. With BBVA it also carries the time in its reference: for
-card payments, when you paid; for receipts and transfers, when the bank processed them.
-Wealthfolio shows it in your time zone and orders each day's transactions by it. If that time is
-on another day (a Saturday purchase booked on Monday), the transaction comes in without a time, on
-the booking date. It is an undocumented BBVA format: with other banks, or if BBVA changes it,
-transactions come in without a time.
+Each activity carries the booking date and, with banks that put it in the transaction's
+reference, the time too. Wealthfolio shows it in your time zone and orders each day's
+transactions by it. If that time is on another day (a Saturday purchase booked on Monday), the
+transaction comes in without a time, on the booking date. Enable Banking gives no time and no bank
+documents it, so it is only read in the formats checked so far:
+
+| Bank | Where the time is | What time it is |
+| --- | --- | --- |
+| BBVA | Digits 19 to 30 of the reference (`YYMMDDhhmmss`, UTC) | For card payments, when you paid; for receipts and transfers, when the bank processed them |
+| Banco de Sabadell | Start of the reference (`YYYYMMDDhhmmss`, Spanish time) | The transaction's: on a transfer from BBVA, the same as at BBVA |
+
+With other banks, or if a bank changes its format, transactions come in without a time.
 
 Every sync reads again the 7 days before the last one, to pick up transactions the bank books
 late. Those already imported are skipped automatically.

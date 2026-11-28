@@ -59,41 +59,96 @@ export function transactionDate(tx: EbTransaction): string | null {
   return value ? value.slice(0, 10) : null;
 }
 
-const MADRID_DAY = (() => {
+const MADRID = (() => {
   try {
-    return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Madrid',
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
   } catch {
     return null;
   }
 })();
 
+/** Wall-clock time in Spain at `instant`: [year, month, day, hour, minute, second]. */
+function madridClock(instant: Date): number[] | null {
+  if (!MADRID) return null;
+  const p = Object.fromEntries(MADRID.formatToParts(instant).map((x) => [x.type, x.value]));
+  return [p.year, p.month, p.day, p.hour, p.minute, p.second].map(Number);
+}
+
 function madridDay(instant: Date): string | null {
-  if (!MADRID_DAY) return null;
-  const parts = Object.fromEntries(MADRID_DAY.formatToParts(instant).map((p) => [p.type, p.value]));
-  return parts.year && parts.month && parts.day ? `${parts.year}-${parts.month}-${parts.day}` : null;
+  const clock = madridClock(instant);
+  return clock ? `${clock[0]}-${String(clock[1]).padStart(2, '0')}-${String(clock[2]).padStart(2, '0')}` : null;
+}
+
+type Zone = 'UTC' | 'Europe/Madrid';
+
+/** The instant a clock reading names in `zone`, or null when it is not a real moment there. */
+function instantOf(clock: number[], zone: Zone): Date | null {
+  const [y, mo, d, h, mi, s] = clock;
+  if (h > 23 || mi > 59 || s > 59) return null;
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi, s);
+  const utc = new Date(asUtc);
+  if (utc.getUTCFullYear() !== y || utc.getUTCMonth() !== mo - 1 || utc.getUTCDate() !== d) return null;
+  if (zone === 'UTC') return utc;
+  // Spain is UTC+1 in winter and UTC+2 in summer: keep the offset whose clock matches.
+  for (const hours of [2, 1]) {
+    const candidate = new Date(asUtc - hours * 3_600_000);
+    const wall = madridClock(candidate);
+    if (wall && wall.every((value, i) => value === clock[i])) return candidate;
+  }
+  return null;
 }
 
 /**
- * The moment BBVA's entry reference carries, as a timestamp on the movement's
- * day, or null to keep the bare day.
- *
- * BBVA's references are 36 digits, and digits 19 to 30 are a moment as
- * YYMMDDhhmmss in UTC: for a card payment, when it was paid; for receipts and
- * transfers, when the bank processed them. It is not documented, so anything
- * else gives null. So does a moment outside `day` (the booking day) in UTC or in
- * Spain, like a Saturday payment booked on Monday: the movement stays on the
- * bank's day, and Wealthfolio, which pairs transfers and spots duplicates by the
- * UTC day, sees the same day as before.
+ * Banks whose entry reference carries the moment of the movement. None of it is
+ * documented: each format was read off the bank's own movements, and a bank
+ * that is not here, or a reference that does not fit, gives no time.
  */
-export function bbvaReferenceTime(tx: EbTransaction, bankName: string, day: string): string | null {
-  if (bankName.trim().toUpperCase() !== 'BBVA') return null;
+const REFERENCE_TIMES: Array<{ bank: RegExp; read: (reference: string) => { clock: number[]; zone: Zone } | null }> = [
+  {
+    // 36 digits; digits 19 to 30 are YYMMDDhhmmss in UTC. Card payments carry
+    // when they were paid; receipts and transfers, when the bank processed them.
+    bank: /^BBVA$/i,
+    read: (reference) => {
+      if (!/^\d{36}$/.test(reference)) return null;
+      const [yy, ...rest] = (reference.slice(18, 30).match(/\d\d/g) ?? []).map(Number);
+      return { clock: [2000 + yy, ...rest], zone: 'UTC' };
+    },
+  },
+  {
+    // YYYYMMDDhhmmss in Spanish time, six digits, "S" and a digit. On a
+    // transfer from BBVA it is BBVA's moment, a second later at most.
+    bank: /SABADELL/i,
+    read: (reference) => {
+      const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\d{6}S\d$/.exec(reference);
+      return m ? { clock: m.slice(1).map(Number), zone: 'Europe/Madrid' } : null;
+    },
+  },
+];
+
+/**
+ * The moment the bank's entry reference carries, as a timestamp on the
+ * movement's day, or null to keep the bare day.
+ *
+ * A moment outside `day` (the booking day) in UTC or in Spain also gives null,
+ * like a Saturday payment booked on Monday: the movement stays on the bank's
+ * day, and Wealthfolio, which pairs transfers and spots duplicates by the UTC
+ * day and values accounts by the Spanish one, sees the same day as before.
+ */
+export function referenceTime(tx: EbTransaction, bankName: string, day: string): string | null {
   const reference = (tx.entry_reference ?? '').trim();
-  if (!/^\d{36}$/.test(reference)) return null;
-  const [yy, mo, dd, hh, mi, ss] = (reference.slice(18, 30).match(/\d\d/g) ?? []).map(Number);
-  const instant = new Date(Date.UTC(2000 + yy, mo - 1, dd, hh, mi, ss));
-  const valid =
-    instant.getUTCMonth() === mo - 1 && instant.getUTCDate() === dd && hh < 24 && mi < 60 && ss < 60;
-  if (!valid) return null;
+  const format = REFERENCE_TIMES.find((f) => f.bank.test(bankName.trim()));
+  const read = format && reference ? format.read(reference) : null;
+  const instant = read ? instantOf(read.clock, read.zone) : null;
+  if (!instant) return null;
   const iso = instant.toISOString();
   if (iso.slice(0, 10) !== day || madridDay(instant) !== day) return null;
   return `${day}T${iso.slice(11, 19)}+00:00`;
@@ -285,8 +340,8 @@ export async function mapTransactions(
     const row: ActivityImport = {
       accountId: options.wealthfolioAccountId,
       activityType,
-      // The booking day; with BBVA, also the time its reference carries.
-      date: bbvaReferenceTime(tx, options.bankName, date) ?? date,
+      // The booking day, and the time the reference carries for the banks that put it there.
+      date: referenceTime(tx, options.bankName, date) ?? date,
       // Cash movement: no asset. The SDK type marks `symbol` optional, but the host
       // requires the field (an empty string for cash, as in Wealthfolio's addon docs);
       // without it checkImport/import fail with a generic internal error.

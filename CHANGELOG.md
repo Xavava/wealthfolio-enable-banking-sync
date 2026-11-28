@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.11.0] - 2026-11-28
+
+### Added
+
+- Los movimientos de Banco de Sabadell también entran con hora. Su referencia empieza por la
+  fecha y la hora en hora española (`20261117091520…` = 17/11 a las 9:15:20). En los traspasos
+  entre BBVA y Sabadell, las dos horas coinciden al segundo, o como mucho con uno de diferencia, y
+  la entrada nunca va antes que la salida.
+- La hora ya no está atada a BBVA: el add-on tiene una lista de formatos por banco. Un banco que
+  no está en la lista entra sin hora, como antes. Añadirlo es una regla más, cuando se sepa dónde
+  pone la hora y en qué zona horaria.
+- Se mantiene la regla de la 1.10.0: solo hay hora si cae en el día contable. Si no, el
+  movimiento entra sin hora. Los movimientos ya importados no cambian.
+- No hay permisos ni hosts nuevos.
+
 ## [1.10.0] - 2026-11-28
 
 ### Added
