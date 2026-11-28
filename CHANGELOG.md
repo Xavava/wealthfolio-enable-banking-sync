@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.12.1] - 2026-11-28
+
+### Fixed
+
+- Un traspaso entre dos cuentas tuyas procesado de madrugada podía no enlazarse al importarlo.
+  Wealthfolio empareja los dos lados por el día que lleva escrito la fecha, y el add-on la escribía
+  en UTC: si un lado caía antes de la medianoche UTC y el otro después, llevaban días distintos.
+  Ahora la fecha va con el desfase de España (`2026-11-26T00:40:00+01:00`), y los dos lados llevan
+  el mismo día. Pasaba desde la 1.12.0.
+- Es el mismo instante que antes: Wealthfolio lo guarda igual, en UTC. Los movimientos ya
+  importados no cambian. No hay permisos ni hosts nuevos.
+
 ## [1.12.0] - 2026-11-28
 
 ### Fixed

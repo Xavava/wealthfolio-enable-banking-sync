@@ -152,19 +152,30 @@ export function referenceMoment(tx: EbTransaction, bankName: string): string | n
   return instant ? `${instant.toISOString().slice(0, 19)}Z` : null;
 }
 
+/** `instant` as a timestamp with Spain's offset ("…T00:40:00+01:00"), or null. */
+function spanishTimestamp(instant: Date): string | null {
+  const clock = madridClock(instant);
+  if (!clock) return null;
+  const [y, mo, d, h, mi, s] = clock;
+  const wall = Date.UTC(y, mo - 1, d, h, mi, s);
+  const hours = Math.round((wall - instant.getTime()) / 3_600_000);
+  return `${new Date(wall).toISOString().slice(0, 19)}+${String(hours).padStart(2, '0')}:00`;
+}
+
 /**
- * The moment the bank's entry reference carries, as a UTC timestamp, when it
- * falls on `day` (the booking day) in Spain; otherwise null, to keep the bare
- * day. A Saturday payment booked on Monday keeps Monday.
+ * The moment the bank's entry reference carries, as a timestamp, when it falls
+ * on `day` (the booking day) in Spain; otherwise null, to keep the bare day. A
+ * Saturday payment booked on Monday keeps Monday.
  *
- * Between 00:00 and 02:00 in Spain the UTC timestamp is still the previous
- * day. That is fine: Wealthfolio shows and values activities by the day in the
- * app's time zone, and recognises the add-on's rows by their ID, not their date.
+ * It is written with Spain's offset, not in UTC, so that it starts with `day`:
+ * when importing, Wealthfolio links the two legs of a transfer by the day as
+ * written, and between 00:00 and 02:00 in Spain the UTC day is the previous
+ * one. Wealthfolio stores the same instant in UTC either way.
  */
 export function referenceTime(tx: EbTransaction, bankName: string, day: string): string | null {
   const instant = referenceInstant(tx, bankName);
   if (!instant || madridDay(instant) !== day) return null;
-  return `${instant.toISOString().slice(0, 19)}+00:00`;
+  return spanishTimestamp(instant);
 }
 
 /**

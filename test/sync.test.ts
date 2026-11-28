@@ -830,12 +830,12 @@ describe('BBVA movements with the time of their reference', () => {
     const { connections: connected } = await connect(h.host);
     const first = await runSync({ host: h.host, config, connections: asBbva(mapAll(connected)), now: new Date('2026-11-20T10:00:00') });
     expect(h.activities.stored.map((r) => [r.date, r.sourceRecordId])).toEqual([
-      ['2026-11-19T18:30:00+00:00', `ref:${REF}|2026-11-19|-23.45`],
+      ['2026-11-19T19:30:00+01:00', `ref:${REF}|2026-11-19|-23.45`],
     ]);
     expect(first.connections[0].accounts[0].pendingNotes).toEqual({
       [`ref:${REF}|2026-11-19|-23.45`]: {
         date: '2026-11-19',
-        activityDate: '2026-11-19T18:30:00+00:00',
+        activityDate: '2026-11-19T19:30:00+01:00',
         activityType: 'WITHDRAWAL',
         currency: 'EUR',
         amount: '23.45',
@@ -847,7 +847,7 @@ describe('BBVA movements with the time of their reference', () => {
     const second = await runSync({ host: h.host, config, connections: first.connections, now: new Date('2026-11-21T10:00:00') });
     expect(second.report.accounts[0]).toMatchObject({ imported: 0, duplicates: 1, notesWritten: 1 });
     expect(h.activities.updates.map((u) => [u.activityDate, u.comment])).toEqual([
-      ['2026-11-19T18:30:00+00:00', 'MERCADONA · PAGO CON TARJETA EN SUPERMERCADOS'],
+      ['2026-11-19T19:30:00+01:00', 'MERCADONA · PAGO CON TARJETA EN SUPERMERCADOS'],
     ]);
   });
 
@@ -880,11 +880,11 @@ describe('a BBVA movement between midnight and 2:00 in Spain', () => {
     const bbva = mapAll(connected).map((c) => ({ ...c, aspsp: { ...c.aspsp, name: 'BBVA' } }));
     const first = await runSync({ host: h.host, config, connections: bbva, now: new Date('2026-11-20T10:00:00') });
     expect(h.activities.stored.map((r) => [r.date, r.sourceRecordId])).toEqual([
-      ['2026-11-18T23:30:00+00:00', `ref:${REF}|2026-11-19|-23.45`],
+      ['2026-11-19T00:30:00+01:00', `ref:${REF}|2026-11-19|-23.45`],
     ]);
     expect(first.connections[0].accounts[0].pendingNotes?.[`ref:${REF}|2026-11-19|-23.45`]).toMatchObject({
       date: '2026-11-19',
-      activityDate: '2026-11-18T23:30:00+00:00',
+      activityDate: '2026-11-19T00:30:00+01:00',
     });
     expect(first.connections[0].accounts[0].retryFrom).toBe('2026-11-19');
   });

@@ -209,7 +209,7 @@ describe('time from the BBVA reference (UTC)', () => {
       [tx({ entry_reference: ref('261125105807'), booking_date: '2026-11-25', value_date: '2026-11-25' })],
       bbva,
     );
-    expect(rows[0].date).toBe('2026-11-25T10:58:07+00:00');
+    expect(rows[0].date).toBe('2026-11-25T11:58:07+01:00');
     expect(rows[0].sourceRecordId).toBe(`ref:${ref('261125105807')}|2026-11-25|-10.00`);
     expect(rows[0].metadata).toMatchObject({
       bookingDate: '2026-11-25',
@@ -234,12 +234,12 @@ describe('time from the BBVA reference (UTC)', () => {
     expect(await dateOf({ entry_reference: ref('261125233000'), booking_date: '2026-11-25' })).toBe('2026-11-25');
     // 23:30 UTC on 24/11 is 00:30 on 25/11 in Spain: the booking day.
     expect(await dateOf({ entry_reference: ref('261124233000'), booking_date: '2026-11-25' })).toBe(
-      '2026-11-24T23:30:00+00:00',
+      '2026-11-25T00:30:00+01:00',
     );
     // Summer (UTC+2): 22:00 UTC is midnight in Spain; 21:59 UTC is still the same day.
     expect(await dateOf({ entry_reference: ref('260710220000'), booking_date: '2026-07-10' })).toBe('2026-07-10');
     expect(await dateOf({ entry_reference: ref('260710215900'), booking_date: '2026-07-10' })).toBe(
-      '2026-07-10T21:59:00+00:00',
+      '2026-07-10T23:59:00+02:00',
     );
   });
 
@@ -268,11 +268,11 @@ describe('time from the Banco de Sabadell reference', () => {
       [tx({ entry_reference: '20261117091520000001S1', booking_date: '2026-11-17', credit_debit_indicator: 'CRDT' })],
       sabadell,
     );
-    expect(rows[0].date).toBe('2026-11-17T08:15:20+00:00');
+    expect(rows[0].date).toBe('2026-11-17T09:15:20+01:00');
     expect(rows[0].sourceRecordId).toBe('ref:20261117091520000001S1|2026-11-17|10.00');
     // Summer (UTC+2).
     expect(await dateOf({ entry_reference: '20260923101530000002S1', booking_date: '2026-09-23' })).toBe(
-      '2026-09-23T08:15:30+00:00',
+      '2026-09-23T10:15:30+02:00',
     );
   });
 
@@ -281,11 +281,11 @@ describe('time from the Banco de Sabadell reference', () => {
     expect(await dateOf({ entry_reference: '20261113221000000003S1', booking_date: '2026-11-16' })).toBe('2026-11-16');
     // 00:30 in Spain is the booking day, although UTC is still the previous one.
     expect(await dateOf({ entry_reference: '20261117003000000001S1', booking_date: '2026-11-17' })).toBe(
-      '2026-11-16T23:30:00+00:00',
+      '2026-11-17T00:30:00+01:00',
     );
     // 01:30 in Spain (winter) is 00:30 UTC: the same day in both.
     expect(await dateOf({ entry_reference: '20261117013000000001S1', booking_date: '2026-11-17' })).toBe(
-      '2026-11-17T00:30:00+00:00',
+      '2026-11-17T01:30:00+01:00',
     );
   });
 
@@ -299,10 +299,42 @@ describe('time from the Banco de Sabadell reference', () => {
   });
 });
 
+describe('the timestamp sent to Wealthfolio', () => {
+  const ref = (moment: string) => `140000070000000000${moment}000000`;
+  const dateOf = async (moment: string, day: string) =>
+    (await mapTransactions([tx({ entry_reference: ref(moment), booking_date: day })], { ...baseOptions, bankName: 'BBVA' })).rows[0].date;
+
+  it('starts with the booking day, so both legs of a night transfer carry the same one', async () => {
+    // 23:40 and 00:05 UTC: two UTC days, the same Spanish night.
+    const out = String(await dateOf('261125234000', '2026-11-26'));
+    const incoming = String(await dateOf('261126000500', '2026-11-26'));
+    expect([out.slice(0, 10), incoming.slice(0, 10)]).toEqual(['2026-11-26', '2026-11-26']);
+  });
+
+  it('names the same instant the reference carries, in winter, summer and around the clock change', async () => {
+    const cases: Array<[string, string, string]> = [
+      ['261125234000', '2026-11-26', '2026-11-25T23:40:00.000Z'],
+      ['260708224500', '2026-07-09', '2026-07-08T22:45:00.000Z'],
+      // Clocks go back on 25/10/2026 at 01:00 UTC: 02:30 happens twice.
+      ['261025003000', '2026-10-25', '2026-10-25T00:30:00.000Z'],
+      ['261025013000', '2026-10-25', '2026-10-25T01:30:00.000Z'],
+      // Clocks go forward on 29/03/2026 at 01:00 UTC.
+      ['260329005959', '2026-03-29', '2026-03-29T00:59:59.000Z'],
+      ['260329010000', '2026-03-29', '2026-03-29T01:00:00.000Z'],
+    ];
+    for (const [moment, day, instant] of cases) {
+      const date = String(await dateOf(moment, day));
+      expect(date.slice(0, 10)).toBe(day);
+      expect(new Date(date).toISOString()).toBe(instant);
+    }
+  });
+});
+
 describe('movementDay', () => {
   it('gives the Spanish day of an import date', () => {
     expect(movementDay('2026-11-25')).toBe('2026-11-25');
     expect(movementDay('2026-11-25T10:58:07+00:00')).toBe('2026-11-25');
+    expect(movementDay('2026-11-25T00:30:00+01:00')).toBe('2026-11-25');
     // 00:30 in Spain, still 24/11 in UTC.
     expect(movementDay('2026-11-24T23:30:00+00:00')).toBe('2026-11-25');
     expect(movementDay('')).toBe('');
